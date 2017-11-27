@@ -45,8 +45,7 @@
 	Requirements:	Elevated privilege (Run as Administrator)
 					Enable Powershell scripts to run.
 
-	Software Requirements:	Any current STAK miner (XMR-STAK/XMR-STAK-AMD) should work as of 
-							the date of this script.
+	Software Requirements:	XMR-STAK.EXE - Other STAK implementations are no longer supported.
 							By default the script is configured to use the following software:
 							
 								XMR-STAK.EXE <-- Don't remark out this one. That would be bad.
@@ -69,7 +68,7 @@
 
 	Author:	TheJerichoJones at the Google Monster mail system
 
-	Version: 2.6
+	Version: 2.7
 	
 	Release Date: 2017-11-19
 
@@ -93,7 +92,7 @@
 #  !! Scroll down to "USER VARIABLES SECTION"
 #  !! There are variables you want to review/modify for your setup
 ######################################################################################
-$ver = "2.6"
+$ver = "2.7"
 ######################################################################################
 #################DO NOT MODIFY ANYTHING IN  THE ELEVATION SECTION ####################
 ############################## BEGIN ELEVATION #######################################

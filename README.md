@@ -22,48 +22,38 @@
 	XMR: 42JFvWHSSGCFUBSwTz522zXrkSuhZ6WnwCFv1mFaokDS7LqfT2MyHW32QbmH3CL94xjXUW8UsQMAj8NFDxaVR8Y1TNqY54W
 	
 	Purpose:	To monitor the STAK hashrate. If it drops below the threshold,
-			the script is restarted.
+				the script is restarted.
 				
 	Features:	Script elevates itself if not run in Admin context.
-	
-			Logging
-				
-			The Radeon RX Vega driver is disabled/enabled.
-				
-			Any tools defined in the "Start Video Card Management Tools Definitions"
-			section below are executed in order.
-				
-			Sets developer suggested environment variables
-				
-			Miner is started.
-				
-			Hash rate is monitored.
-				
-			If hash rate falls below the target as defined in the 
-			$hdiff variable (default is 100 hashes) 				
-			or STAK stops responding the miner process is killed.
-				
-			Script re-starts itself.
+				Logging
+				The Radeon RX Vega driver is disabled/enabled.
+				Any tools defined in the "Start Video Card Management Tools Definitions"
+				section below are executed in order.
+				Sets developer suggested environment variables
+				Miner is started.
+				Hash rate is monitored.
+				If hash rate falls below the target as defined in the $hdiff variable (default is 100 hashes) 
+				or STAK stops responding the miner process is killed.
+				Script re-starts itself.
 
 	*** IMPORTANT NOTE ***: If the script cannot kill the miner it will stop and wait for input.
-				Otherwise it would invoke the miner over and over until the PC ran out of memory.
-				In testing I have not seen it fail to kill the miner but I need to account for it.
+							Otherwise it would invoke the miner over and over until the PC ran out of memory.
+							In testing I have not seen it fail to kill the miner but I need to account for it.
 
 	Requirements:	Elevated privilege (Run as Administrator)
 					Enable Powershell scripts to run.
 
-	Software Requirements:	Any current STAK miner (XMR-STAK/XMR-STAK-AMD) should work as of 
-				the date of this script.
-				By default the script is configured to use the following software:
+	Software Requirements:	XMR-STAK.EXE - Other STAK implementations are no longer supported.
+							By default the script is configured to use the following software:
 							
-					XMR-STAK.EXE <-- Don't remark out this one. That would be bad.
-					OverdriveNTool.exe
-					nvidiasetp0state.exe
-					nvidiaInspector.exe
+								XMR-STAK.EXE <-- Don't remark out this one. That would be bad.
+								OverdriveNTool.exe
+								nvidiasetp0state.exe
+								nvidiaInspector.exe
 							
-				If you do not wish to use some or all of them just REMARK (use a #)
-				out the lines below where they are defined in the USER VARIABLES SECTION.
-				All executable files must be in the same folder as the script.
+							If you do not wish to use some or all of them just REMARK (use a #)
+							out the lines below where they are defined in the USER VARIABLES SECTION.
+							All executable files must be in the same folder as the script.
 							
 							
 	Configuration: See below in the script for configuration items.
