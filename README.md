@@ -37,29 +37,28 @@
 				Script re-starts itself.
 
 	*** IMPORTANT NOTE ***: If the script cannot kill the miner it will stop and wait for input.
-							Otherwise it would invoke the miner over and over until the PC ran out of memory.
-							In testing I have not seen it fail to kill the miner but I need to account for it.
+				Otherwise it would invoke the miner over and over until the PC ran out of memory.
+				In testing I have not seen it fail to kill the miner but I need to account for it.
 
 	Requirements:	Elevated privilege (Run as Administrator)
-					Enable Powershell scripts to run.
+			Enable Powershell scripts to run.
 
 	Software Requirements:	XMR-STAK.EXE - Other STAK implementations are no longer supported.
-							By default the script is configured to use the following software:
+				By default the script is configured to use the following software:
 							
-								XMR-STAK.EXE <-- Don't remark out this one. That would be bad.
-								OverdriveNTool.exe
-								nvidiasetp0state.exe
-								nvidiaInspector.exe
+					XMR-STAK.EXE <-- Don't remark out this one. That would be bad.
+					OverdriveNTool.exe
+					nvidiasetp0state.exe
+					nvidiaInspector.exe
 							
-							If you do not wish to use some or all of them just REMARK (use a #)
-							out the lines below where they are defined in the USER VARIABLES SECTION.
-							All executable files must be in the same folder as the script.
+				If you do not wish to use some or all of them just REMARK (use a #)
+				out the lines below where they are defined in the USER VARIABLES SECTION.
+				All executable files must be in the same folder as the script.
 							
 							
 	Configuration: See below in the script for configuration items.
 
 	Usage:	Powershell.exe -ExecutionPolicy Bypass -File JJs_HashMonitor.ps1
 	
-
 
 	Copyright 2017, TheJerichoJones
