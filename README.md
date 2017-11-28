@@ -1,3 +1,5 @@
+	**Note: There will be no more Releases. Meaning no more separate ZIP files. Just click the Download button ***
+	
 	JJ's XMR-STAK HashRate Monitor and Restart Tool
 
 	Based on an idea by @CircusDad on SupportXMR Chat
