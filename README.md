@@ -55,7 +55,8 @@
 							
 				If you do not wish to use some or all of them just REMARK (use a #)
 				out the lines below where they are defined in the USER VARIABLES SECTION.
-				All executable files must be in the same folder as the script.
+				!!!! All executable files must be in the same folder as the script. !!!!
+				!!!! PATHS ARE NOT SUPPORTED (FOR NOW ANYWAY) !!!!
 							
 							
 	Configuration: See below in the script for configuration items.
