@@ -68,9 +68,9 @@
 
 	Author:	TheJerichoJones at the Google Monster mail system
 
-	Version: 2.7
+	Version: 2.9
 	
-	Release Date: 2017-11-19
+	Release Date: 2017-11-30
 
 	Copyright 2017, TheJerichoJones
 
@@ -92,55 +92,15 @@
 #  !! Scroll down to "USER VARIABLES SECTION"
 #  !! There are variables you want to review/modify for your setup
 ######################################################################################
-$ver = "2.7"
-######################################################################################
-#################DO NOT MODIFY ANYTHING IN  THE ELEVATION SECTION ####################
-############################## BEGIN ELEVATION #######################################
-# If you can't Elevate you're going to have a bad time...
-# Get the ID and security principal of the current user account
-$myWindowsID=[System.Security.Principal.WindowsIdentity]::GetCurrent()
-$myWindowsPrincipal=new-object System.Security.Principal.WindowsPrincipal($myWindowsID)
- 
-# Get the security principal for the Administrator role
-$adminRole=[System.Security.Principal.WindowsBuiltInRole]::Administrator
- 
-# Check to see if we are currently running "as Administrator"
-if ($myWindowsPrincipal.IsInRole($adminRole))
-   {
-   # We are running "as Administrator" - so change the title and background color to indicate this
-   $Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool v $ver"
-   $Host.UI.RawUI.BackgroundColor = "DarkBlue"
-   clear-host
-   }
-else
-   {
-   # We are not running "as Administrator" - so relaunch as administrator
-   
-   # Create a new process object that starts PowerShell
-   $newProcess = new-object System.Diagnostics.ProcessStartInfo "PowerShell";
-   
-   # Specify the current script path and name as a parameter
-   $newProcess.Arguments = $myInvocation.MyCommand.Definition;
-   
-   # Indicate that the process should be elevated
-   $newProcess.Verb = "runas";
-   
-   # Start the new process
-   [System.Diagnostics.Process]::Start($newProcess) | Out-Null;
-   
-   # Exit from the current, unelevated, process
-   exit
-   }
- 
+$ver = "2.9"
+$Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool v $ver"
+$Host.UI.RawUI.BackgroundColor = "DarkBlue"
+
 Clear-Host
 Write-Host "Starting the Hash Monitor Script..."
 
 Push-Location $PSScriptRoot
 ######################################################################################
-################# DO NOT MODIFY ANYTHING IN THE ELEVATION SECTION ####################
-################################ END ELEVATION #######################################
-
-
 ############# STATIC Variables - DO NOT CHANGE ##########################
 $ScriptDir = Split-Path $MyInvocation.MyCommand.Path -Parent
 $ScriptName = $MyInvocation.MyCommand.Name
@@ -205,7 +165,7 @@ $STAKstable = 120		# How long to wait for the hashrate to stabilize.
 
 function call-self 
 {
-	Start-Process -FilePath "C:\WINDOWS\system32\WindowsPowerShell\v1.0\Powershell.exe" -ArgumentList $ScriptDir\$ScriptName -WorkingDirectory $ScriptDir -NoNewWindow
+	Start-Process -FilePath "C:\WINDOWS\system32\WindowsPowerShell\v1.0\Powershell.exe" -ArgumentList .\$ScriptName -WorkingDirectory $PSScriptRoot -NoNewWindow
 	EXIT
 }
 
@@ -384,7 +344,9 @@ function starting-Hash
 		$total = $null
 		$data = @{}
 		$total = @{}
-		$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $global:Url
+		$ProgressPreference = 'SilentlyContinue'
+		$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $global:Url -TimeoutSec 60
+		$ProgressPreference = 'Continue'
 		If ($rawdata)
 		{
 			$data = $rawdata | ConvertFrom-Json
@@ -451,7 +413,9 @@ function current-Hash
 		$data = @{}
 		$total = @{}
 		Write-host -fore Green `nQuerying STAK...this can take a minute.
-		$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $global:Url
+		$ProgressPreference = 'SilentlyContinue'
+		$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $global:Url -TimeoutSec 60
+		$ProgressPreference = 'Continue'
 		$flag = "True"
 		}
 	Catch
@@ -529,9 +493,9 @@ function kill-Process ($STAKexe) {
 		}
 		Else
 		{
-			Write-host -fore Green "`n$prog process was not found"
-			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-			log-Write ("$timeStamp	$prog process was not found")
+			#Write-host -fore Green "`n$prog process was not found"
+			#$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+			#log-Write ("$timeStamp	$prog process was not found")
 		}
 	}
 	Catch
@@ -616,11 +580,98 @@ function get-RunTime ($sec)
 	}
 }
 
+############################## BEGIN ELEVATION #######################################
+# If you can't Elevate you're going to have a bad time...
+# Elevation code written by: Jonathan Bennett
+# License: Not specified
+# https://www.autoitscript.com/forum/topic/174609-powershell-script-to-self-elevate/
+#
+# Test if admin
+function Test-IsAdmin() 
+{
+    # Get the current ID and its security principal
+    $windowsID = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $windowsPrincipal = new-object System.Security.Principal.WindowsPrincipal($windowsID)
+ 
+    # Get the Admin role security principal
+    $adminRole=[System.Security.Principal.WindowsBuiltInRole]::Administrator
+ 
+    # Are we an admin role?
+    if ($windowsPrincipal.IsInRole($adminRole))
+    {
+        $true
+    }
+    else
+    {
+        $false
+    }
+}
+
+# Get UNC path from mapped drive
+function Get-UNCFromPath
+{
+   Param(
+    [Parameter(Position=0, Mandatory=$true, ValueFromPipeline=$true)]
+    [String]
+    $Path)
+
+    if ($Path.Contains([io.path]::VolumeSeparatorChar)) 
+    {
+        $psdrive = Get-PSDrive -Name $Path.Substring(0, 1) -PSProvider 'FileSystem'
+
+        # Is it a mapped drive?
+        if ($psdrive.DisplayRoot) 
+        {
+            $Path = $Path.Replace($psdrive.Name + [io.path]::VolumeSeparatorChar, $psdrive.DisplayRoot)
+        }
+    }
+
+    return $Path
+ }
+
+# Relaunch the script if not admin
+function Invoke-RequireAdmin
+{
+    Param(
+    [Parameter(Position=0, Mandatory=$true, ValueFromPipeline=$true)]
+    [System.Management.Automation.InvocationInfo]
+    $MyInvocation)
+
+    if (-not (Test-IsAdmin))
+    {
+        # Get the script path
+        $scriptPath = $MyInvocation.MyCommand.Path
+        $scriptPath = Get-UNCFromPath -Path $scriptPath
+
+        # Need to quote the paths in case of spaces
+        $scriptPath = '"' + $scriptPath + '"'
+
+        # Build base arguments for powershell.exe
+        [string[]]$argList = @('-NoLogo -NoProfile', '-ExecutionPolicy Bypass', '-File', $scriptPath)
+
+        # Add 
+        $argList += $MyInvocation.BoundParameters.GetEnumerator() | Foreach {"-$($_.Key)", "$($_.Value)"}
+        $argList += $MyInvocation.UnboundArguments
+
+        try
+        {    
+            $process = Start-Process PowerShell.exe -PassThru -Verb Runas -WorkingDirectory $pwd -ArgumentList $argList
+            exit $process.ExitCode
+        }
+        catch {}
+
+        # Generic failure code
+        exit 1 
+    }
+}
 ##### END FUNCTIONS #####
 
 ##### MAIN - or The Fun Starts Here #####
 $timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
 log-Write ("$timeStamp	Script Started")
+
+# Relaunch if not admin
+Invoke-RequireAdmin $script:MyInvocation
 
 resize-Console 50 12
 
