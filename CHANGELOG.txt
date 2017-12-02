@@ -7,7 +7,7 @@ Changes:	Fixed an issue where the script would fail if parent path contained spa
 		Moved elevation code into the FUNCTION area of the script
 
 Version: 3.0
-Projected Release Date: 2017-12-02
+Release Date: 2017-12-02
 Changes:	Each Vega card is now reset individually. This should work better for
 		those with many cards in their rig.
 		Powershell progress bars should no longer be shown
