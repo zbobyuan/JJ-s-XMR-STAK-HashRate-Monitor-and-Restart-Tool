@@ -68,9 +68,9 @@
 
 	Author:	TheJerichoJones at the Google Monster mail system
 
-	Version: 2.9
+	Version: 3.0
 	
-	Release Date: 2017-11-30
+	Release Date: 2017-12-02
 
 	Copyright 2017, TheJerichoJones
 
@@ -92,7 +92,7 @@
 #  !! Scroll down to "USER VARIABLES SECTION"
 #  !! There are variables you want to review/modify for your setup
 ######################################################################################
-$ver = "2.9"
+$ver = "3.0"
 $Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool v $ver"
 $Host.UI.RawUI.BackgroundColor = "DarkBlue"
 
@@ -125,7 +125,7 @@ $vidTool = @()
 #########################################################################
 $Logfile = "XMR_Restart_$(get-date -f yyyy-MM-dd).log"	# Log what we do, delete or REMARK if you don't want logging
 $global:STAKexe = "XMR-STAK.EXE"	# The miner. Expects to be in same folder as this script
-#$global:STAKcmdline = "--config config.txt"	# STAK arguments. Not required, REMARK out if not needed
+#$global:STAKcmdline = "--noNVIDIA"	# STAK arguments. Not required, REMARK out if not needed
 $stakIP = '127.0.0.1'	# IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
 						# !! DON'T FORGET TO ENABLE THE WEBSERVER IN YOUR CONFIG FILE !!
 $stakPort = '420'		# Port STAK is listening on
@@ -178,28 +178,31 @@ Function log-Write
 	}
 }
 
-function reset-VegaDriver {
+function reset-VideoCard {
 	###################################
-	##### Reset Video Card driver #####
+	##### Reset Video Card(s) #####
 	##### No error checking
-	Write-host "Resetting Driver..."
+	Write-host "Resetting Video Card(s)..."
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Running Driver Reset")
+	log-Write ("$timeStamp	Running Video Card Reset")
 	$d = Get-PnpDevice| where {$_.friendlyname -like 'Radeon RX Vega'}
-	$d  | Disable-PnpDevice -ErrorAction Ignore -Confirm:$false | Out-Null
+	$vCTR = 0
+	foreach ($dev in $d) {
+		$vCTR = $vCTR + 1
+		Write-host -fore Green "Disabling "$dev.Name '#'$vCTR
+		Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false | Out-Null
+		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+		log-Write ("$timeStamp	Disabled $vCTR $dev")
+		Start-Sleep -s 3
+		Write-host -fore Green "Enabling "$dev.Name '#' $vCTR
+		Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false | Out-Null
+		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+		log-Write ("$timeStamp	Enabled $vCTR $dev")
+		Start-Sleep -s 3
+	}
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Video driver disabled")
-	Write-host -fore Green "Video driver disabled"
-	# Wait 5 seconds
-	Start-Sleep -s 5
-	$d  | Enable-PnpDevice -ErrorAction Ignore -Confirm:$false | Out-Null
-	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Video driver enabled")
-	Write-host -fore Green "Video driver enabled"
-	# Wait 5 seconds
-	Start-Sleep -s 10
-	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Video driver reset completed")
+	log-Write ("$timeStamp	$vCTR Video Card(s) Reset")
+	Write-host -fore Green $vCTR "Video Card(s) Reset"
 }
 
 Function Run-Tools ($app)
@@ -344,9 +347,7 @@ function starting-Hash
 		$total = $null
 		$data = @{}
 		$total = @{}
-		$ProgressPreference = 'SilentlyContinue'
 		$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $global:Url -TimeoutSec 60
-		$ProgressPreference = 'Continue'
 		If ($rawdata)
 		{
 			$data = $rawdata | ConvertFrom-Json
@@ -413,9 +414,7 @@ function current-Hash
 		$data = @{}
 		$total = @{}
 		Write-host -fore Green `nQuerying STAK...this can take a minute.
-		$ProgressPreference = 'SilentlyContinue'
 		$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $global:Url -TimeoutSec 60
-		$ProgressPreference = 'Continue'
 		$flag = "True"
 		}
 	Catch
@@ -426,7 +425,6 @@ function current-Hash
 			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
 			log-Write ("$timeStamp	Restarting - Lost connectivity to STAK")
 			Start-Sleep -s 10
-			kill-Process ($STAKexe)
 			$flag = "False"
 			#Break
 		}
@@ -435,10 +433,41 @@ function current-Hash
 			Break
 		}
 		$data = $rawdata | ConvertFrom-Json
+		# Total Hash
 		$rawtotal = ($data.hashrate).total
 		$total = $rawtotal | foreach {$_}
 		$global:currHash = $total[0]
-
+		# Current difficulty
+		$rawdiff = ($data.results).diff_current
+		$currDiff = $rawdiff | foreach {$_}
+		$global:currDiff = $currDiff[0]
+		# Good shares processed
+		$rawSharesGood = ($data.results).shares_good
+		$SharesGood = $rawSharesGood | foreach {$_}
+		$global:GoodShares = $SharesGood[0]
+		# Total shares processed
+		$rawSharesTotal = ($data.results).shares_total
+		$SharesTotal = $rawSharesTotal | foreach {$_}
+		$global:TotalShares = $SharesTotal[0]
+		# Shares processed time
+		$rawSharesTime = ($data.results).avg_time
+		$SharesTime = $rawSharesTime | foreach {$_}
+		$global:TimeShares = $SharesTime[0]
+		# Current Pool
+		$global:ConnectedPool = ($data.connection).pool
+		# Pool connected uptime
+		$rawTimeUp = ($data.connection).uptime
+		$rawUpTime = $rawTimeUp | foreach {$_}
+		$global:UpTime = $rawUpTime[0]
+	
+		#Write-Host Current hashrate:    $global:currHash
+		#Write-Host Current Diff:        $global:currDiff
+		#Write-Host Current good shares: $global:GoodShares
+		#Write-Host Current total shares: $global:TotalShares
+		#Write-Host Current time shares: $global:TimeShares
+		#Write-Host Current Pool: $global:ConnectedPool
+		#Write-Host Current Pool uptime: $global:UpTime
+		
 		refresh-Screen
 		
 		Start-Sleep -s 60
@@ -515,26 +544,22 @@ function kill-Process ($STAKexe) {
 Function refresh-Screen
 {
 	Clear-Host
-	$tFormat =  get-RunTime ($runTime)
-	Write-Host "=================================================="
+	$tmRunTime =  get-RunTime ($runTime)
+	$tpUpTime =  get-RunTime ($global:UpTime)
+	#Write-Host "=================================================="
 	Write-host -fore Green `nStarting Hash Rate:	$global:maxhash H/s 
 	Write-host -fore Green `nRestart Target Hash Rate:	$global:rTarget H/s
 	Write-host -fore Green `nCurrent Hash Rate: $global:currHash H/s
-	Write-host -fore Green `nMonitoring Uptime:	$tFormat `n
+	Write-host -fore Green `nMonitoring Uptime:	$tmRunTime `n
 	Write-Host "=================================================="
-}
-
-function resize-Console ($Width,$Height)
-{
-	$targetWindow = (get-host).ui.rawui
-	$windowSize = $targetWindow.windowsize
-	$windowSize.height = $Height
-	$windowSize.width = $Width
-	$targetWindow.windowsize = $windowSize
-	$bufferSize = $targetWindow.buffersize
-	$bufferSize.height = $Height
-	$bufferSize.width = $Width
-	$targetWindow.buffersize = $bufferSize
+	Write-host -fore Green `nPool:	$global:ConnectedPool
+	Write-host -fore Green `nPool Uptime:  $tpUpTime
+	Write-host -fore Green `nPool Difficulty: $global:currDiff
+	Write-host -fore Green `nTotal Shares: $global:TotalShares
+	Write-host -fore Green `nGood Shares:	$global:GoodShares
+	Write-host -fore Green `nGood Shares %:	(($global:GoodShares / $global:TotalShares) * 100)
+	Write-host -fore Green `nShare Time:	$global:TimeShares
+	#Write-Host "=================================================="
 }
 
 function set-STAKVars
@@ -629,6 +654,69 @@ function Get-UNCFromPath
     return $Path
  }
 
+ function Resize-Console
+{
+#
+#	.Synopsis
+#	Resets the size of the current console window
+#	.Description
+#	Set-myConSize resets the size of the current console window. By default, it
+#	sets the windows to a height of 40 lines, with a 3000 line buffer, and sets the 
+#	the width and width buffer to 120 characters. 
+#	.Example
+#	Set-myConSize
+#	Restores the console window to 120x40
+#	.Example
+#	Set-myConSize -Height 30 -Width 180
+#	Changes the current console to a height of 30 lines and a width of 180 characters. 
+#	.Parameter Height
+#	The number of lines to which to set the current console. The default is 40 lines. 
+#	.Parameter Width
+#	The number of characters to which to set the current console. Default is 120. Also sets the buffer to the same value
+#	.Inputs
+#	[int]
+#	[int]
+#	.Notes
+#		Author: Charlie Russel
+#		Modified by: TheJerichoJones
+#	 Copyright: 2017 by Charlie Russel
+#			  : Permission to use is granted but attribution is appreciated
+#	   Initial: 28 April, 2017 (cpr)
+#	   ModHist:
+#
+	[CmdletBinding()]
+	Param(
+		 [Parameter(Mandatory=$False,Position=0)]
+		 [int]
+		 $Height = 30,
+		 [Parameter(Mandatory=$False,Position=1)]
+		 [int]
+		 $Width = 55
+		 )
+	$Console = $host.ui.rawui
+	$Buffer  = $Console.BufferSize
+	$ConSize = $Console.WindowSize
+
+	# If the Buffer is wider than the new console setting, first reduce the buffer, then do the resize
+	If ($Buffer.Width -gt $Width -or $Buffer.Height -gt $Height) {
+		If ($Buffer.Width -gt $Width ) {
+		   $ConSize.Width = $Width
+		}
+		If ($Buffer.Height -gt $Height ) {
+		   $ConSize.Height = $Height
+		}
+		$Console.WindowSize = $ConSize
+	}
+	$Buffer.Width = $Width
+	$ConSize.Width = $Width
+	$Buffer.Height = $Height
+	$Console.BufferSize = $Buffer
+	$ConSize = $Console.WindowSize
+	$ConSize.Width = $Width
+	$ConSize.Height = $Height
+	$Console.WindowSize = $ConSize
+}	  
+
 # Relaunch the script if not admin
 function Invoke-RequireAdmin
 {
@@ -667,17 +755,18 @@ function Invoke-RequireAdmin
 ##### END FUNCTIONS #####
 
 ##### MAIN - or The Fun Starts Here #####
+$ProgressPreference = 'SilentlyContinue'
 $timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-log-Write ("$timeStamp	Script Started")
+log-Write ("$timeStamp	=== Script Started ===")
 
 # Relaunch if not admin
 Invoke-RequireAdmin $script:MyInvocation
 
-resize-Console 50 12
+Resize-Console
 
 kill-Process ($STAKexe)
 
-reset-VegaDriver ($devID)
+reset-VideoCard
 
 If ($vidTool) # If $vidTool is defined
 {
@@ -695,7 +784,9 @@ starting-Hash # Get the starting hash rate
 current-Hash # Gather the current hash rate every 60 seconds until it drops beneath the threshold
 
 $timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-log-Write ("$timeStamp	Script Ended")
+log-Write ("$timeStamp	=== Script Ended ===")
+
+$ProgressPreference = 'Continue'
 
 call-Self # Restart the script
 
