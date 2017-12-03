@@ -19,3 +19,16 @@ Changes:	Each Vega card is now reset individually. This should work better for
 		Good Shares
 		Good Shares %
 		Share Time
+
+Version: 3.1
+Release Date: 2017-12-03
+Changes:	Verifies Miner EXE exists right after elevation now.
+			Added version to logging so I can tell what version you are complaining about.
+			In situations where the monitor has to stop (FATAL Errors) you now must
+			have the monitor window in focus and press F12. Before if you hit any key from any app
+			it would respond and close.
+			Monitor window is now brought to the foreground at start and after the Miner is responding.
+			More error checking of data from the miner.
+
+
+			

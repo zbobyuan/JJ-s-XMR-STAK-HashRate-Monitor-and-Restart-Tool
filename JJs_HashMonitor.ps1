@@ -68,9 +68,9 @@
 
 	Author:	TheJerichoJones at the Google Monster mail system
 
-	Version: 3.0
+	Version: 3.1f
 	
-	Release Date: 2017-12-02
+	Release Date: 2017-12-03
 
 	Copyright 2017, TheJerichoJones
 
@@ -92,7 +92,7 @@
 #  !! Scroll down to "USER VARIABLES SECTION"
 #  !! There are variables you want to review/modify for your setup
 ######################################################################################
-$ver = "3.0"
+$ver = "3.1f"
 $Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool v $ver"
 $Host.UI.RawUI.BackgroundColor = "DarkBlue"
 
@@ -178,13 +178,41 @@ Function log-Write
 	}
 }
 
+function chk-STAKEXE
+{
+	#####  Look for STAK  #####
+	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+	log-Write ("$timeStamp	$ver	Looking for STAK...")
+	Write-Host "Looking for STAK..."
+	If (Test-Path $global:STAKexe)
+	{
+		Write-Host "STAK found! Continuing..."
+		log-Write ("$timeStamp	$ver	STAK found! Continuing...")
+	}
+	Else
+	{
+		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+		log-Write ("$timeStamp	$ver	$global:STAKexe NOT FOUND.. EXITING")
+		Clear-Host
+		Write-Host -fore Red `n`n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		Write-Host -fore Red "         $global:STAKexe NOT found. "
+        Write-Host -fore Red "   Can't do much without the miner now can you!"
+		Write-Host -fore Red "          Now exploding... buh bye!"
+		Write-Host -fore Red !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		wait-ForF12
+		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+		log-Write ("$timeStamp	$ver	=== Script Ended ===")
+		Exit
+	}
+}
+
 function reset-VideoCard {
 	###################################
 	##### Reset Video Card(s) #####
 	##### No error checking
 	Write-host "Resetting Video Card(s)..."
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Running Video Card Reset")
+	log-Write ("$timeStamp	$ver	Running Video Card Reset")
 	$d = Get-PnpDevice| where {$_.friendlyname -like 'Radeon RX Vega'}
 	$vCTR = 0
 	foreach ($dev in $d) {
@@ -192,16 +220,16 @@ function reset-VideoCard {
 		Write-host -fore Green "Disabling "$dev.Name '#'$vCTR
 		Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false | Out-Null
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-		log-Write ("$timeStamp	Disabled $vCTR $dev")
+		log-Write ("$timeStamp	$ver	Disabled $vCTR $dev")
 		Start-Sleep -s 3
 		Write-host -fore Green "Enabling "$dev.Name '#' $vCTR
 		Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false | Out-Null
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-		log-Write ("$timeStamp	Enabled $vCTR $dev")
+		log-Write ("$timeStamp	$ver	Enabled $vCTR $dev")
 		Start-Sleep -s 3
 	}
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	$vCTR Video Card(s) Reset")
+	log-Write ("$timeStamp	$ver	$vCTR Video Card(s) Reset")
 	Write-host -fore Green $vCTR "Video Card(s) Reset"
 }
 
@@ -214,7 +242,7 @@ Function Run-Tools ($app)
 		{
 			Write-host -fore Green "Starting " $prog[0]
 			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-			log-Write ("$timeStamp	Starting $item ")
+			log-Write ("$timeStamp	$ver	Starting $item ")
 			If ($prog[1]) {
 				Start-Process -FilePath $prog[0] -ArgumentList $prog[1] | Out-Null
 			}
@@ -235,7 +263,7 @@ function start-Mining
 {
 	#####  Start STAK  #####
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Starting STAK...")
+	log-Write ("$timeStamp	$ver	Starting STAK...")
 	If (Test-Path $global:STAKexe)
 	{
 		Write-Host "Starting STAK..."
@@ -251,22 +279,23 @@ function start-Mining
 	Else
 	{
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-		log-Write ("$timeStamp	$global:STAKexe NOT FOUND.. EXITING")
+		log-Write ("$timeStamp	$ver	$global:STAKexe NOT FOUND.. EXITING")
 		Clear-Host
 		Write-Host -fore Red `n`n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		Write-Host -fore Red "         $global:STAKexe NOT found. "
         Write-Host -fore Red "   Can't do much without the miner now can you!"
 		Write-Host -fore Red "          Now exploding... buh bye!"
 		Write-Host -fore Red !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		Write-Host -NoNewLine "Press any key to continue..."
-		$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+		wait-ForF12
+		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+		log-Write ("$timeStamp	$ver	=== Script Ended ===")
 		Exit
 	}
 }
 
 Function chk-STAK($global:Url) {
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Waiting for STAK HTTP daemon to start")
+	log-Write ("$timeStamp	$ver	Waiting for STAK HTTP daemon to start")
 	Write-host "Waiting for STAK HTTP daemon to start"
 	
 	$flag = "False"
@@ -297,9 +326,10 @@ Function chk-STAK($global:Url) {
 	If ($flag -eq "True")
 	{
 		Clear-Host
+		set-ForegroundWindow | Out-Null
 		Write-host -fore Green "`n`n`n## STAK HTTP daemon has started ##`n"
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-		log-Write ("$timeStamp	STAK started successfully")
+		log-Write ("$timeStamp	$ver	STAK started successfully")
 		
 	}
 	ElseIf ($flag -eq "False")
@@ -308,7 +338,7 @@ Function chk-STAK($global:Url) {
 		Write-host -fore Red "`n`n`n!! Timed out waiting for STAK HTTP daemon to start !!`n"
 		start-sleep -s 10
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-		log-Write ("$timeStamp	Timed out waiting for STAK HTTP daemon to start")
+		log-Write ("$timeStamp	$ver	Timed out waiting for STAK HTTP daemon to start")
 		Start-Sleep -s 10
 		#Write-Host -NoNewLine "Press any key to EXIT..."
 		#$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
@@ -321,10 +351,12 @@ Function chk-STAK($global:Url) {
 		Write-host -fore Red "`n`n`n*** Unknown failure (Daemon failed to start?)... EXITING ***`n"
 		start-sleep -s 10
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-		log-Write ("$timeStamp	Unknown failure starting STAK (Daemon failed to start?)")
+		log-Write ("$timeStamp	$ver	Unknown failure starting STAK (Daemon failed to start?)")
 		Start-Sleep -s 10
 		#Write-Host -NoNewLine "Press any key to EXIT..."
 		#$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+		log-Write ("$timeStamp	$ver	=== Script Ended ===")
 		call-Self
 		EXIT
 	}
@@ -334,17 +366,19 @@ Function chk-STAK($global:Url) {
 function starting-Hash
 {
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Waiting for hash rate to stabilize")
+	log-Write ("$timeStamp	$ver	Waiting for hash rate to stabilize")
 	#Write-host -fore Green "Waiting for hash rate to stabilize"
 
     #$startTestHash = 1
-    $currTestHash = 0
+    $global:currTestHash = 0
 
+	$sCTR = 0
 	# Wait x seconds for hash rate to stabilize
 	while ($STAKstable -gt 0)
 	{
 		$data = $null
 		$total = $null
+		$global:currTestHash = $null
 		$data = @{}
 		$total = @{}
 		$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $global:Url -TimeoutSec 60
@@ -353,46 +387,94 @@ function starting-Hash
 			$data = $rawdata | ConvertFrom-Json
 			$rawtotal = ($data.hashrate).total
 			$total = $rawtotal | foreach {$_}
-			$currTestHash = $total[0]
+			$global:currTestHash = $total[0]
+			If (!$global:currTestHash -eq [int] -And $sCTR -gt 20)
+			{
+				Clear-Host
+				Write-host -fore Red "`nSTAK is not returning good hash data"
+				Write-host -fore Red "`nCurrent Hash = $global:currTestHash"
+				Write-host -fore Red "Restarting in 10 seconds"
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+				log-Write ("$timeStamp	$ver	Hash Mon Phase: STAK is not returning good data. Current Hash =  $global:currTestHash")
+				Start-Sleep -s 10
+				$flag = "False"
+				#Break
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+				log-Write ("$timeStamp	$ver	=== Script Ended ===")
+				call-Self
+				Exit
+			}
+			ElseIf ($global:currTestHash -eq 0 -And $sCTR -gt 20)
+			{
+				Clear-Host
+				Write-host -fore Red "`nSTAK seems to have stopped hashing"
+				Write-host -fore Red "`nCurrent Hash =  $global:currTestHash"
+				Write-host -fore Red "Restarting in 10 seconds"
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+				log-Write ("$timeStamp	$ver	Hash Mon Phase: STAK seems to have stopped hashing. Current Hash =  $global:currTestHash")
+				Start-Sleep -s 10
+				$flag = "False"
+				#Break
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+				log-Write ("$timeStamp	$ver	=== Script Ended ===")
+				call-Self
+				Exit
+			}
 			If (!$startTestHash)
 			{
-				$startTestHash = $currTestHash
+				$startTestHash = $global:currTestHash
 			}	
 
 			Clear-Host
-			If ($currTestHash)
+			If ($global:currTestHash)
 			{
-				Write-host -fore Green "`n`nCurrent Hash Rate: $currTestHash H/s"
+				Write-host -fore Green "`n`nCurrent Hash Rate: $global:currTestHash H/s"
 			}
 			Write-host -fore Green "`n`nWaiting $STAKstable seconds for hashrate to stabilize."
 			Write-host -fore Green "Press CTRL-C to EXIT NOW"
 			Start-Sleep -s 1
 			$STAKstable = $STAKstable - 1
+			$sCTR = $sCTR + 1
+		}
+		Else
+		{
+			Clear-Host
+			Write-host -fore Red "`nSTAK is not returning array data"
+			Write-host -fore Red "Restarting in 10 seconds"
+			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+			log-Write ("$timeStamp	$ver	Stabilization Phase: STAK is not returning array data.")
+			Start-Sleep -s 10
+			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+			log-Write ("$timeStamp	$ver	=== Script Ended ===")
+			call-Self
+			Exit
 		}
     }
-    If (!$currTestHash)
+    If (!$global:currTestHash)
 	{
 		Clear-Host
 		Write-host -fore Green `nCould not get hashrate... restarting
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-		log-Write ("$timeStamp	Could not get hashrate... restarting")
+		log-Write ("$timeStamp	$ver	Stabilization Phase: Could not get hashrate... restarting")
+		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+		log-Write ("$timeStamp	$ver	=== Script Ended ===")
 		call-Self
 		Exit
 	}
-	ElseIf ($currTestHash -gt $startTestHash)
+	ElseIf ($global:currTestHash -gt $startTestHash)
 	{
-		$global:maxhash = $currTestHash
+		$global:maxhash = $global:currTestHash
 	}
 	Else
     {
 		$global:maxhash = $startTestHash
 	}
 
-    $global:currHash = $currTestHash
+    $global:currHash = $global:currTestHash
 	$global:rTarget = ($global:maxhash - $hdiff)
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Hash rate stabilized")
-	log-Write ("$timeStamp	Starting Hashrate: $global:maxhash H/s	Drop Target Hashrate: $global:rTarget H/s")
+	log-Write ("$timeStamp	$ver	Hash rate stabilized")
+	log-Write ("$timeStamp	$ver	Starting Hashrate: $global:maxhash H/s	Drop Target Hashrate: $global:rTarget H/s hDiff: $hdiff")
 }
 
 function current-Hash
@@ -404,13 +486,14 @@ function current-Hash
 	$runTime = 0
 	$flag = "False"
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Hash monitoring has begun")
+	log-Write ("$timeStamp	$ver	Hash monitoring has begun")
 
 	DO
 	{
 	Try {
 		$data = $null
 		$total = $null
+		$global:currHash = $null
 		$data = @{}
 		$total = @{}
 		Write-host -fore Green `nQuerying STAK...this can take a minute.
@@ -423,7 +506,7 @@ function current-Hash
 			Write-host -fore Red "`nWe seem to have lost connectivity to STAK"
 			Write-host -fore Red "Restarting in 10 seconds"
 			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-			log-Write ("$timeStamp	Restarting - Lost connectivity to STAK")
+			log-Write ("$timeStamp	$ver	Restarting - Lost connectivity to STAK")
 			Start-Sleep -s 10
 			$flag = "False"
 			#Break
@@ -432,11 +515,53 @@ function current-Hash
 		{
 			Break
 		}
-		$data = $rawdata | ConvertFrom-Json
-		# Total Hash
-		$rawtotal = ($data.hashrate).total
-		$total = $rawtotal | foreach {$_}
-		$global:currHash = $total[0]
+		If ($rawdata)
+		{
+			# Parse JSON data
+			$data = $rawdata | ConvertFrom-Json
+			# Total Hash
+			$rawtotal = ($data.hashrate).total
+			$total = $rawtotal | foreach {$_}
+			$global:currHash = $total[0]
+			If (!$global:currHash -eq [int])
+			{
+				Clear-Host
+				Write-host -fore Red "`nSTAK is not returning good hash data"
+				Write-host -fore Red "`nCurrent Hash = $global:currHash"
+				Write-host -fore Red "Restarting in 10 seconds"
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+				log-Write ("$timeStamp	$ver	Hash Mon Phase: STAK is not returning good data. Current Hash =  $global:currHash")
+				Start-Sleep -s 10
+				$flag = "False"
+				Break
+				# Falls through to call-Self
+			}
+			ElseIf ($global:currHash -eq 0)
+			{
+				Clear-Host
+				Write-host -fore Red "`nSTAK seems to have stopped hashing"
+				Write-host -fore Red "`nCurrent Hash =  $global:currHash"
+				Write-host -fore Red "Restarting in 10 seconds"
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+				log-Write ("$timeStamp	$ver	Hash Mon Phase: STAK seems to have stopped hashing. Current Hash =  $global:currHash")
+				Start-Sleep -s 10
+				$flag = "False"
+				Break
+				# Falls through to call-Self
+			}
+		}
+		Else
+		{
+			Clear-Host
+			Write-host -fore Red "`nSTAK is not returning array data"
+			Write-host -fore Red "Restarting in 10 seconds"
+			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+			log-Write ("$timeStamp	$ver	Hash Mon Phase: STAK is not returning array data. $rawdata")
+			Start-Sleep -s 10
+			$flag = "False"
+			Break
+			# Falls through to call-Self
+		}
 		# Current difficulty
 		$rawdiff = ($data.results).diff_current
 		$currDiff = $rawdiff | foreach {$_}
@@ -460,14 +585,6 @@ function current-Hash
 		$rawUpTime = $rawTimeUp | foreach {$_}
 		$global:UpTime = $rawUpTime[0]
 	
-		#Write-Host Current hashrate:    $global:currHash
-		#Write-Host Current Diff:        $global:currDiff
-		#Write-Host Current good shares: $global:GoodShares
-		#Write-Host Current total shares: $global:TotalShares
-		#Write-Host Current time shares: $global:TimeShares
-		#Write-Host Current Pool: $global:ConnectedPool
-		#Write-Host Current Pool uptime: $global:UpTime
-		
 		refresh-Screen
 		
 		Start-Sleep -s 60
@@ -482,7 +599,7 @@ function current-Hash
 		Write-host -fore Red "`nRestarting in 10 seconds"
 		$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
 		$tFormat =  get-RunTime ($runTime)
-		log-Write ("$timeStamp	Restarting after $tFormat - Hash rate dropped from $global:maxhash H/s to $global:currHash H/s")
+		log-Write ("$timeStamp	$ver	Restarting after $tFormat - Hash rate dropped from $global:maxhash H/s to $global:currHash H/s")
 		Start-Sleep -s 10
 	}
 }
@@ -495,6 +612,7 @@ function kill-Process ($STAKexe) {
 		# get STAK process
 		$stakPROC = Get-Process $prog -ErrorAction SilentlyContinue
 		if ($stakPROC) {
+			Write-host -fore Red "$prog is running... killing $prog process."
 			# try gracefully first
 			$stakPROC.CloseMainWindow() | Out-Null
 			# kill after five seconds
@@ -503,28 +621,30 @@ function kill-Process ($STAKexe) {
 				$stakPROC | Stop-Process -Force | Out-Null
 			}
 			if (!$stakPROC.HasExited) {
-				Write-host -fore Red "Failed to kill the process $prog"
+				Write-host -fore Red "Failed to kill the $prog process"
 				Write-host -fore Red "`nIf we don't stop here STAK would be invoked"
 				Write-host -fore Red "`nover and over until the PC crashed."
 				Write-host -fore Red "`n`n That would be very bad."
 				Write-host -fore Red 'Press any key to EXIT...';
 				$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
 				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-				log-Write ("$timeStamp	Failed to kill $prog")
+				log-Write ("$timeStamp	$ver	Failed to kill $prog")
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+				log-Write ("$timeStamp	$ver	=== Script Ended ===")
 				EXIT
 			}
 			Else
 			{
-				Write-host -fore Green "Successfully killed the process $prog"
+				Write-host -fore Green "Successfully killed the $prog process"
 				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-				log-Write ("$timeStamp	STAK closed successfully")
+				log-Write ("$timeStamp	$ver	STAK closed successfully")
 			}
 		}
 		Else
 		{
 			#Write-host -fore Green "`n$prog process was not found"
 			#$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-			#log-Write ("$timeStamp	$prog process was not found")
+			#log-Write ("$timeStamp	$ver	$prog process was not found")
 		}
 	}
 	Catch
@@ -532,11 +652,12 @@ function kill-Process ($STAKexe) {
 			Write-host -fore Red "Failed to kill the process $prog"
 			Write-host -fore Red "`nIf we don't stop here STAK would be invoked"
 			Write-host -fore Red "`nover and over until the PC crashed."
-			Write-host -fore Red "`n`n That would be very bad."
-			Write-host -fore Red 'Press any key to EXIT...';
-			$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
+			Write-host -fore Red "`n`n That would be very bad.`n`n"
+			wait-ForF12
 			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-			log-Write ("$timeStamp	Failed to kill $prog")
+			log-Write ("$timeStamp	$ver	Failed to kill $prog")
+			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
+			log-Write ("$timeStamp	$ver	=== Script Ended ===")
 			EXIT
 	}
 }
@@ -566,7 +687,7 @@ function set-STAKVars
 {
 	Write-host -fore Green "Setting Env Variables for STAK"
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Setting Env Variables for STAK")
+	log-Write ("$timeStamp	$ver	Setting Env Variables for STAK")
 
 	[System.Environment]::SetEnvironmentVariable("GPU_FORCE_64BIT_PTR", "1", "User")
 	[System.Environment]::SetEnvironmentVariable("GPU_MAX_HEAP_SIZE", "99", "User")
@@ -575,7 +696,7 @@ function set-STAKVars
 	
 	Write-host -fore Green "Env Variables for STAK have been set"
 	$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-	log-Write ("$timeStamp	Env Variables for STAK have been set")
+	log-Write ("$timeStamp	$ver	Env Variables for STAK have been set")
 }
 
 function get-RunTime ($sec)
@@ -752,19 +873,66 @@ function Invoke-RequireAdmin
         exit 1 
     }
 }
+
+
+function set-ForegroundWindow
+{
+$user32DLL =  @"
+  using System;
+  using System.Runtime.InteropServices;
+  public class Tricks
+  {
+	 [DllImport("user32.dll")]
+	 [return: MarshalAs(UnmanagedType.Bool)]
+	 public static extern bool SetForegroundWindow(IntPtr hWnd);
+  }
+"@
+
+	Add-Type -TypeDefinition $user32DLL
+
+	$wHandle = (Get-Process -id $pid).MainWindowHandle
+	[Tricks]::SetForegroundWindow($wHandle)
+}
+
+function wait-ForF12
+{
+	$continue = $true
+	Write-Host "Press F12 to EXIT."
+	while($continue)
+	{
+
+		if ([console]::KeyAvailable)
+		{
+			#echo "Press F12";
+			$x = [System.Console]::ReadKey() 
+
+			switch ( $x.key)
+			{
+				F12 { $continue = $false }
+			}
+			Start-Sleep -s 1
+		} 
+	}
+}
+
+
 ##### END FUNCTIONS #####
 
 ##### MAIN - or The Fun Starts Here #####
 $ProgressPreference = 'SilentlyContinue'
 $timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-log-Write ("$timeStamp	=== Script Started ===")
+log-Write ("$timeStamp	$ver	=== Script Started ===")
 
 # Relaunch if not admin
 Invoke-RequireAdmin $script:MyInvocation
 
 Resize-Console
 
+set-ForegroundWindow | Out-Null
+
 kill-Process ($STAKexe)
+
+chk-STAKEXE
 
 reset-VideoCard
 
@@ -784,7 +952,7 @@ starting-Hash # Get the starting hash rate
 current-Hash # Gather the current hash rate every 60 seconds until it drops beneath the threshold
 
 $timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date)
-log-Write ("$timeStamp	=== Script Ended ===")
+log-Write ("$timeStamp	$ver	=== Script Ended ===")
 
 $ProgressPreference = 'Continue'
 
