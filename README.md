@@ -1,66 +1,62 @@
-	**Note: There will be no more Releases. Meaning no more separate ZIP files. Just click the Download button ***
-	
-	JJ's XMR-STAK HashRate Monitor and Restart Tool
+Please see changelog for a detailed enhancement list.
 
-	Based on an idea by @CircusDad on SupportXMR Chat
+I initally modified this script for myself after having issues with the amount of dev-mining in other versions due to frequent hash-drops whilst getting my Vega config spot on 
+
+There is an executable version of this script in the releases folder if you prefer that to powershell, 
+
+Please remember to launch as admin for better XMR-STAK performance and to be able to reset display cards
+
+Please feel free to provide feedback and enhancement Idea's as your contributions are welcomed
+
+For additonal cards to be supported by default please provide me the friendly names found by running the following powershell command on the destination system
+    Get-PnpDevice -Class Display 
+
+Example Grafana dashboard screenshot included in repository
+
+    This codebase is adapated from JJ's XMR-STAK HashRate Monitor and Restart Tool originally created by Jericho Jones 
+    Reworked by Mutl3y May 2018
+        XMR: 49QA139gTEVMDV9LrTbx3qGKKEoYJucCtT4t5oUHHWfPBQbKc4MdktXfKSeT1ggoYVQhVsZcPAMphRS8vu8oxTf769NDTMu
+	
+	Original developer Jericho Jones
+	    XMR:    42JFvWHSSGCFUBSwTz522zXrkSuhZ6WnwCFv1mFaokDS7LqfT2MyHW32QbmH3CL94xjXUW8UsQMAj8NFDxaVR8Y1TNqY54W
+	
+	This was Based on an idea by @CircusDad on SupportXMR Chat
 	His Vega Mining Guide for XMR --> https://vegamining.blogspot.com/
+        XMR:    46yn37Go9nP66k2bCy9uQsgsXtJExcZzST78SL2QfU5w7JCZneZRNGCNtfJL49BfEfckPii9g23TiBTdnHct6AQL444nDpY
+        ETH:    0x0Db3B49F4075eA688d89E86cbd5750890687F066
+        NANO:   xrb_3bqdyojqj1tg7ddd94nado8zcbbduwkzrrje8znuhgot9gacdcan5sspzzni
+        BTC:    17gywiZLp7BPM2ZZu6FMW57ANswBGuxycJ
+        
+   
+There is no dev fee mining included in this software, 
+If you find this software usefull please donate what you can spare to the above addresses.
+    
+    I strongly advise you to follow the setup guides available on vegamining.blogspot.com to create a stable platform for this software tooperate on.
+    
+    This codebase works well with with AMD Crimson Blockchain drivers released August 2017
+    https://support.amd.com/en-us/kb-articles/Pages/Radeon-Software-Crimson-ReLive-Edition-Beta-for-Blockchain-Compute-Release-Notes.aspx
+    
+    Radeon Software Crimson ReLive Edition Beta for Blockchain Compute Driver for Windows® 10 64-bit​
+    https://www2.ati.com/drivers/beta/Win10-64Bit-Crimson-ReLive-Beta-Blockchain-Workloads-Aug23.exe
+     
+    Radeon Software Crimson ReLive Edition Beta for Blockchain Compute Driver for Windows® 10 32-bit​
+    https://www2.ati.com/drivers/beta/win10-32bit-crimson-relive-beta-blockchain-workloads-aug11.exe
+     
+    Radeon Software Crimson ReLive Edition Beta for Blockchain Compute Driver for Windows® 7 64/32 bit​        
+    https://www2.ati.com/drivers/beta/Win7-Crimson-ReLive-Beta-Blockchain-Workloads-Aug23.exe
+     
+    It should also be compatable with future driver releases
 
-	How many times have you walked away for your computer to come back
-	and notice that your hash rate dropped by HUNDREDS of hashes?
-	How many times did you wake up to that scenario and wonder how long it had been going on?
-	
-	What happens when you go away for a few days with your lady/gentleman or some other sexy creature? 
-	If you're like me you stress over your rig! It really kills the mood.
-	
-	How much potential profit have you lost to this terror!
-	
-	Well, I have felt your pain and decided to sit down and come up with a solution and here it is.
-	How much is your peace of mind worth? If you find that your daily hash rate has now increased
-	because this is no longer happening to you I'd appreciate it if you would consider a donation
-	toward my hard work.
-	
-	No amount is too small! I'm not greedy! :-)
-	
-	XMR: 42JFvWHSSGCFUBSwTz522zXrkSuhZ6WnwCFv1mFaokDS7LqfT2MyHW32QbmH3CL94xjXUW8UsQMAj8NFDxaVR8Y1TNqY54W
-	
-	Purpose:	To monitor the STAK hashrate. If it drops below the threshold,
-				the script is restarted.
-				
-	Features:	Script elevates itself if not run in Admin context.
-				Logging
-				The Radeon RX Vega driver is disabled/enabled.
-				Any tools defined in the "Start Video Card Management Tools Definitions"
-				section below are executed in order.
-				Sets developer suggested environment variables
-				Miner is started.
-				Hash rate is monitored.
-				If hash rate falls below the target as defined in the $hdiff variable (default is 100 hashes) 
-				or STAK stops responding the miner process is killed.
-				Script re-starts itself.
+    This software now supports card resets for 
+    AMD Vega 56 & 64
+    AMD Vega Frontier Edition
+    AMD 580 series    
+    
+    User defined card support to follow in next release
+    
 
-	*** IMPORTANT NOTE ***: If the script cannot kill the miner it will stop and wait for input.
-				Otherwise it would invoke the miner over and over until the PC ran out of memory.
-				In testing I have not seen it fail to kill the miner but I need to account for it.
 
-	Requirements:	Elevated privilege (Run as Administrator)
-			Enable Powershell scripts to run.
+     
+     
 
-	Software Requirements:	XMR-STAK.EXE - Other STAK implementations are no longer supported.
-				By default the script is configured to use the following software:
-							
-					XMR-STAK.EXE <-- Don't remark out this one. That would be bad.
-					OverdriveNTool.exe
-					nvidiasetp0state.exe
-					nvidiaInspector.exe
-							
-				If you do not wish to use some or all of them just REMARK (use a #)
-				out the lines below where they are defined in the USER VARIABLES SECTION.
-				!!!! All executable files should be in the same folder as the script. !!!!
-				(You should be able to use a path here as long as there are no spaces in that path.)
-							
-	Configuration: See below in the script for configuration items.
-
-	Usage:	Powershell.exe -ExecutionPolicy Bypass -File JJs_HashMonitor.ps1
 	
-
-	Copyright 2017, TheJerichoJones
