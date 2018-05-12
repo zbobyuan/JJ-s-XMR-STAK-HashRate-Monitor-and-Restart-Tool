@@ -1,9 +1,10 @@
 ﻿#requires -Version 5.0 -Modules Microsoft.PowerShell.Diagnostics, PnpDevice
 Clear-Host
+$startattempt=0
 
 Function Run-Miner {
 do {
-$ver = '4.2.5'
+$ver = '4.2.6'
 $debug=$false
 
 Push-Location -Path $PSScriptRoot
@@ -61,6 +62,9 @@ $defaults="
 
   # STAK arguments. Not required, REMARK out if not needed
   STAKcmdline = --noNVIDIA	
+
+  # Max attempts at starting STAK before rebooting, only triggers where it hangs on startup, 0 to disable
+  STAKMaxStartAttempts = 3
 
   # !! DON'T FORGET TO ENABLE THE WEBSERVER IN YOUR CONFIG FILE !!
   # Port STAK is listening on
@@ -192,6 +196,13 @@ if($inifilevalues.STAKexe){
   $stakexe = $inifilevalues.STAKexe
 } else {     $stakexe = 'XMR-STAK.EXE'   }
   
+  
+# Stak STAKStartAttempts
+if($inifilevalues.STAKMaxStartAttempts){
+  $STAKMaxStartAttempts = $inifilevalues.STAKMaxStartAttempts
+} else {     $STAKMaxStartAttempts = 3  }
+
+
 # Command Line 
 if($inifilevalues.STAKcmdline){
   $STAKcmdline = $inifilevalues.STAKcmdline
@@ -952,6 +963,7 @@ Function quickcheckSTAK {
   {
     Clear-Host
     kill-Process -STAKexe ($STAKexe)
+    reset-VideoCard -force $true
     test-cards
     disable_crossfire
     & "$env:windir\system32\ipconfig.exe" /FlushDNS
@@ -998,7 +1010,22 @@ Function chk-STAK {
   {
     Clear-Host
     log-Write -logstring '!! Timed out waiting for STAK HTTP daemon to start !!' -fore red
-    Pause-Then-Exit
+    
+    # Check for hanging stak on startup, This can also be caused by setting STAKmin too low
+    if (check-Process -exe $script:STAKexe) {
+        $startattempt = $startattempt +1
+        log-Write -fore red -logstring "Abnormal Stak process seems to have hung on strartup or your STAKmin $STAKmin is too low, attempt $startattempt"
+        if ( ($startattempt -ge $STAKMaxStartAttempts ) -and ($STAKMaxStartAttempts -gt 0)) {
+            log-write -fore red "Restarting computer in 10 seconds"
+            start-sleep -s 10
+            Restart-Computer -Force 
+        } elseif (($startattempt -ge $STAKMaxStartAttempts ) -and ($STAKMaxStartAttempts -eq 0) ) {
+            log-write -froe red "Reboot disabled, stopping here, please investigate STAK startup"
+            Pause-Then-Exit
+        } else {
+            call-self
+            } 
+            }
   }
   Else
   {
@@ -1007,6 +1034,30 @@ Function chk-STAK {
     Pause-Then-Exit
   }
 }
+
+function check-Process {  
+  param  (
+    [Parameter(Mandatory)]
+    $exe
+  )
+try
+  {
+    $prog = ($exe -split '\.', 2)
+    $prog = $prog[0]
+
+    # get process
+    $app = Get-Process -Name $prog -ErrorAction SilentlyContinue
+    if ($app) {
+        return $true
+    } else { 
+        return $false
+        }
+    } 
+catch {return $false}      
+      
+}
+
+
 
 function starting-Hash{
   log-Write -logstring 'Waiting for hash rate to stabilize' -fore Yellow

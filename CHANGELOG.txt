@@ -1,3 +1,16 @@
+Version 4.2.6
+Releae Date: 2018-05-12
+Notes:  RX580 enhanced startup control
+
+Changes:
+        Now checks for STAK hanging on startup and allow a configurable amount of retries before rebooting pc
+            enabled by setting STAKMaxStartAttampts > 0
+        Enabled full display driver reset for supported cards at launch if card reset enabled
+            RX580's sometimes don't show driver error until they have been reset once and just play-up in the meantime
+            This does not change targeted reset during runtime behaivour
+
+
+
 Version 4.2.5
 Releae Date: 2018-05-05
 Notes:  First release of Mutl3y's fork
