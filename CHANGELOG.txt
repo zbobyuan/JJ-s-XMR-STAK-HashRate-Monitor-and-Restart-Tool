@@ -1,10 +1,59 @@
-Version: 2.9
-Release Date: 2017-11-30
-Changes:	Fixed an issue where the script would fail if parent path contained spaces
-		Some Progress bars are now hidden
-		Removed STAK process not found message (irrelevant)
-		Changed out elevation code
-		Moved elevation code into the FUNCTION area of the script
+Version 4.2.8
+Releae Date: 2018-05-15
+Notes:  Integrated notifications, Come say hi https://join.slack.com/t/hashmonitor/signup
+
+Changes:
+    Changed card reset on startup to be a user configurable item
+    Integrated Slack and email notifications, Key startup and error values only,
+        Warning SMS's are single item messages which can be prolific, enable with caution
+
+
+Version 4.2.6
+Releae Date: 2018-05-12
+Notes:  RX580 enhanced startup control
+
+Changes:
+        Now checks for STAK hanging on startup and allow a configurable amount of retries before rebooting pc
+            enabled by setting STAKMaxStartAttampts > 0
+        Enabled full display driver reset for supported cards at launch if card reset enabled
+            RX580's sometimes don't show driver error until they have been reset once and just play-up in the meantime
+            This does not change targeted reset during runtime behaviour
+
+
+
+Version 4.2.5
+Releae Date: 2018-05-05
+Notes:  First release of Mutl3y's fork
+
+Changes:
+        Checks for running XMR-STAK on startup and attempts to connect, failure initiates restart of XMR-STAK
+        User settings moved out to ini file, generated on initial run, Please read this thoughly
+        Added support for AMD 580 and Vega Frontier Edition cards by default
+        Targeted card reset on error, Resets all cards if hashdrop detected, Less reset's less issues
+        Added Grafana UDP metrics output, Captures per thread stats
+        10 second timeout during startup to catch xmr-stak issues
+        disables crossfire at launch for Vega's
+        Internet connectivity checked and monitoring is paused until avaialble, max 10 minutes by default
+        sub folders for logs and xmr-stak enabled by default for neatness
+
+        Settings added
+            minimum hash rate:  Absolute bare minimum to use for hash drop calculations, uses (max-hash - hdiff) if higher
+            runningSTAKtimeout: Wait time for running stak to repond
+            minlowratecheck:    Minimum time to wait for hashrate to stabalise at startup before checking minhashrate
+            minhashrate:        Minimum accepted hashrate, changes to (max-hashrate - hdiff) if higher
+            rebootTimeout:      Time to wait if reboot triggered
+            rebootEnabled:      Reboot on driver error
+            timeout:            XMR-STAK startup timeout
+            STAKstable:         Hashrate stabalization period
+            internetWaitTime:   How long to wait for an internet connection issue to resolve
+            retrytimer:         How long to wait for hashrate to recover before restarting cards
+            grafanaEnabled:     Enable Grafana metrics, InfluxDB UDP support only
+            grafanaUtpIP:       IP address of you Grafana instance
+            grafanaUtpPort:     InfluxDB utp port, Remember to set default UTP database
+
+Requires:
+        Requires https://github.com/markwragg/PowerShell-Influx
+        To install from PSGallery run  "Install-Module Influx -Scope CurrentUser"
 
 Version: 3.0
 Release Date: 2017-12-02
@@ -19,3 +68,13 @@ Changes:	Each Vega card is now reset individually. This should work better for
 		Good Shares
 		Good Shares %
 		Share Time
+
+
+Version: 2.9
+Release Date: 2017-11-30
+Changes:	Fixed an issue where the script would fail if parent path contained spaces
+		Some Progress bars are now hidden
+		Removed STAK process not found message (irrelevant)
+		Changed out elevation code
+		Moved elevation code into the FUNCTION area of the script
+
