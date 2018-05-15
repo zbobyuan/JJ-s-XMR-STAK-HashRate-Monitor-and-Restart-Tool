@@ -31,7 +31,7 @@ Example Grafana dashboard screenshot included in repository
 There is no dev fee mining included in this software, 
 If you find this software usefull please donate what you can spare to the above addresses.
     
-    I strongly advise you to follow the setup guides available on vegamining.blogspot.com to create a stable platform for this software tooperate on.
+    I strongly advise you to follow the setup guides available on vegamining.blogspot.com to create a stable platform for this software to operate on.
     
     This codebase works well with with AMD Crimson Blockchain drivers released August 2017
     https://support.amd.com/en-us/kb-articles/Pages/Radeon-Software-Crimson-ReLive-Edition-Beta-for-Blockchain-Compute-Release-Notes.aspx
