@@ -54,7 +54,7 @@ If you find this software usefull please donate what you can spare to the above 
     AMD Vega Frontier Edition
     AMD 580 series    
     
-    User defined card support to follow in next release
+   
     
 
 
