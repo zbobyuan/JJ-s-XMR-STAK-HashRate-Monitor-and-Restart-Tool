@@ -1,3 +1,5 @@
+Come say hi https://join.slack.com/t/hashmonitor/signup
+
 Please see changelog for a detailed enhancement list.
 
 I initally modified this script for myself after having issues with the amount of dev-mining in other versions due to frequent hash-drops whilst getting my Vega config spot on 
