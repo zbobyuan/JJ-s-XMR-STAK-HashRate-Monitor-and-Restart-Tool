@@ -121,7 +121,7 @@ do {
     # must be greater than the time it takes all your threads to start
     minlowratecheck = 20
 
-    # Enable Vega card resets, Includes RX580's Vega's Vega FE
+    # Enable Vega card resets, Includes RX580's, Vega's, Vega FE
     CardResetEnabled = True
 
     # Force a card reset at startup
@@ -139,7 +139,7 @@ do {
     # Reboot enabled on driver error
     rebootEnabled = True
 
-    # enable grafana - Only influx udp supported, remember to set default database in influx config file
+    # enable grafana - Only influx udp supported, set default database in influx config file to 'xmrSTAK'
     grafanaEnabled = True
 
     # grafana utp url
@@ -158,7 +158,8 @@ do {
     # gPassword='YOUR Gmail eMail password'	# Set YOUR Gmail eMail password
 
     # Slack
-    # slackUrl='https://hooks.slack.com/services/xxxxxx'	#Put your WebHooks URL here
+    # Put your WebHooks URL here,  Default is for this codes Slack space, Usefull if you can allow it to post at least once so I get to see it used out in the wild, your welcome to join and discuss
+    slackUrl='https://hooks.slack.com/services/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'	
     # slackUsername= Defaults to computer name
     # slackChannel='#Hashmonitor'	# Channel to post message. Can be in the format @username or #channel
     # slackEmoji=':clap:'		# Example: :clap:. (Not Mandatory). (if slackEmoji is set, slackIconUrl will not be used)
@@ -166,11 +167,6 @@ do {
     # slackIconUrl=''			# Url for an icon to use. (Not Mandatory)
 
   "
-
-
-
-
-
  
   #########################################################################
   # USER VARIABLES from preferences file                                  #
@@ -358,7 +354,7 @@ do {
   # slackUrl='https://hooks.slack.com/services/xxxxxx'	#Put your WebHooks URL here
   if ($inifilevalues.slackUrl){
     $slackUrl = $inifilevalues.slackUrl
-  } else { $slackUrl = 'https://hooks.slack.com/services/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' }  
+  } 
 
   # slackUsername='JJsHashMonitor'		# Username to send from.
   if ($inifilevalues.slackUsername){

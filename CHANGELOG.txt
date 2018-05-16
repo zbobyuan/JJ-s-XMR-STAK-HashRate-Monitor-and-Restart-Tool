@@ -1,5 +1,13 @@
 Version 4.2.8
 Releae Date: 2018-05-15
+Notes:  Moved default Slack url nto ini file so user can disable
+
+Changes:
+    Added Slack post failure warning to screen to allow diag, clear Slack url to disable notification
+
+
+Version 4.2.8
+Releae Date: 2018-05-15
 Notes:  Integrated notifications, Come say hi https://join.slack.com/t/hashmonitor/signup
 
 Changes:
