@@ -1,6 +1,10 @@
-Version 4.2.8
+Version 4.2.9
 Releae Date: 2018-05-15
 Notes:  Moved default Slack url nto ini file so user can disable
+
+Required:
+    https://github.com/markwragg/PowerShell-Influx
+    to install open a Powershell windows and type "Install-Module Influx -Scope CurrentUser"
 
 Changes:
     Added Slack post failure warning to screen to allow diag, clear Slack url to disable notification
