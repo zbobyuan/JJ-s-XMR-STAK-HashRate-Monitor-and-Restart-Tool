@@ -2,6 +2,7 @@
 Clear-Host
 $startattempt=0
 
+
 Function Run-Miner {
 do {
   $ver = '4.2.9'
@@ -37,7 +38,6 @@ do {
   $script:STAKisup = $false
   $script:threadArray = @()
 
-  $sleeptime = 5
   $stakIP = '127.0.0.1'	# IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
   $runTime = 0
 
@@ -73,6 +73,9 @@ do {
     # STAK retry timer, Retry time used in low hash rate if under minimum hash rate, 
     # This can allow recovery before a reset is tried
     retrytimer = 10
+
+    # Sleep time in between checks, directly affects grafana metrics
+    5
 
     # Height of console, Max 75
     consoleHeight = 25
@@ -234,7 +237,12 @@ do {
   if ($inifilevalues.retrytimer){
     $script:retrytimer = [int]$inifilevalues.retrytimer
   } Else {    $script:retrytimer = 60       }
-  
+
+  # refresh rate
+  if ($inifilevalues.sleeptime){
+      $sleeptime = [int]$inifilevalues.sleeptime
+  } Else {    $sleeptime = 5       }
+
   # Console Height
   if ($inifilevalues.consoleHeight){
     $consoleHeight = [int]$inifilevalues.consoleHeight 
@@ -412,7 +420,7 @@ do {
       [switch] $notification
 
     )
-    $timeStamp = '{0:yyyy-MM-dd HH:mm}' -f (Get-Date)
+    $timeStamp = (get-Date -format r)
     if ($fore -ne '0'){
       Write-Host -Fore $fore "$logstring"
     }
@@ -425,7 +433,7 @@ do {
       Add-content -Path $Logfile -Value ("$timeStamp `t$logstring")
     } 
   
-    $msgText="$timeStamp	$env:computername $logstring"
+    $msgText="$timeStamp`t  $logstring"
     if ($notification) {
         If ($smsAddress)
         {
@@ -1244,7 +1252,6 @@ do {
     } while ($script:currHash -gt $minhashrate )
 	
     If ($script:currHash -lt $minhashrate ) {
-      write-host $script:currHash  $minhashrate
       lowratecheck $minhashrate
     }
 	

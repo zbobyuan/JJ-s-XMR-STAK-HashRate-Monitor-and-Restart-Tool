@@ -1,3 +1,16 @@
+Version 4.2.10
+Releae Date: 2018-05-25
+Notes:  Included dockerfile and directory structure for Grafana
+
+Required:
+    Docker
+
+Changes:
+    Update Slack URL to current invite, expires 29/06/2018
+    Added in framework for Dockerised Grafana instance
+    Changed timestamp in logs and notifications to be rfc1123 compliant http://www.ietf.org/rfc/rfc1123.txt
+    Exposed sleeptime between checks in ini file, Affects screen refresh and metric submission to Grafana
+
 Version 4.2.9
 Releae Date: 2018-05-15
 Notes:  Moved default Slack url nto ini file so user can disable
