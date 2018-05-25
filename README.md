@@ -1,4 +1,6 @@
-Come say hi https://join.slack.com/t/hashmonitor/signup
+Come say hi 
+
+https://join.slack.com/t/hashmonitor/shared_invite/enQtMzcxNDgyMjQ1NzUxLWY2NTA2NDdmNDBhM2QyNzIyNzgyYjNjMjFjYzA3NDZiNDFmYjVjYjEwMWZjNWZiYWUyZDM5OWVkNDY5MmJmMzM
 
 Please see changelog for a detailed enhancement list.
 
