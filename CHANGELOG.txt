@@ -1,5 +1,5 @@
 Version 4.2.11
-Releae Date: 2018-05-25
+Releae Date: 2018-05-26
 Notes:  Included Grafana Dashboard example
 
 Changes:
@@ -14,7 +14,6 @@ Notes:
 	Introduced alertLevel setting to control verbosity of Slack massages, Defaults to 1
     Reccomend that Grafana is run on a different host than any of your miners but will work locally, not a good idea
         when your rebooting the host, You can use an internet based service
-
 
 Version 4.2.10
 Releae Date: 2018-05-25
