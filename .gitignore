@@ -54,3 +54,6 @@ fabric.properties
 
 .idea/
 /Releases/
+/logs/
+/hashmonitor.ini
+/SCRATCH.ps1

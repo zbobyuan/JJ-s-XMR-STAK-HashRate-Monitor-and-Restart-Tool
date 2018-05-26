@@ -1,3 +1,21 @@
+Version 4.2.11
+Releae Date: 2018-05-25
+Notes:  Included Grafana Dashboard example
+
+Changes:
+    Included Grafana dashboard example that can be imported
+    Slack verbosity control
+    Code readability cleanup
+    Add Influx module warning, Disables Grafana it Influx module not available
+    Added Windows based monitor.cmd to setup Grafana on Docker
+	
+Notes: 
+	Current Slack invite is https://join.slack.com/t/hashmonitor/shared_invite/enQtMzcxNDgyMjQ1NzUxLWY2NTA2NDdmNDBhM2QyNzIyNzgyYjNjMjFjYzA3NDZiNDFmYjVjYjEwMWZjNWZiYWUyZDM5OWVkNDY5MmJmMzM
+	Introduced alertLevel setting to control verbosity of Slack massages, Defaults to 1
+    Reccomend that Grafana is run on a different host than any of your miners but will work locally, not a good idea
+        when your rebooting the host, You can use an internet based service
+
+
 Version 4.2.10
 Releae Date: 2018-05-25
 Notes:  Included dockerfile and directory structure for Grafana
