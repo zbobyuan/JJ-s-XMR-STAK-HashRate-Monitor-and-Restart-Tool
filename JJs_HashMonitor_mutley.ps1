@@ -1465,8 +1465,6 @@ Function Run-Miner {
         Function grafana {
             if ($grafanaEnabled -eq 'True') {
                 $Metrics = @{
-                    MemoryFree = (Get-Counter -Counter '\Memory\Available MBytes').CounterSamples.CookedValue
-                    CPU = (Get-Counter -Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
                     Total_Hash_Rate = [int]$script:currHash
                     Difficulty = [int]$script:currDiff
                     Total_Shares = [int]$script:TotalShares
