@@ -569,6 +569,7 @@ Function Run-Miner {
                     try {
                         $process = Start-Process -FilePath PowerShell.exe -PassThru -Verb Runas -WorkingDirectory $pwd -ArgumentList $argList
                         exit $process.ExitCode
+                        log-Write 'Restarting as Administrator' -fire Red -notification 1
                     }
                     catch {
                         log-Write 'Failed to elevate to administrator' -fore Red -notification 1
@@ -1513,6 +1514,8 @@ Function Run-Miner {
         ##### MAIN - or The Fun Starts Here #####
         do {
             $ProgressPreference = 'SilentyContinue' # Disable web request progress bar
+            # Relaunch if not admin
+            Invoke-RequireAdmin -MyInvocation $script:MyInvocation
 
             # Display key settings
             if ($initalRun) {
@@ -1527,8 +1530,7 @@ Function Run-Miner {
             Log-Write -logstring "Reset Cards enabled: $CardResetEnabled" -fore 'White' -notification 2
             Start-Sleep -Seconds 2
 
-            # Relaunch if not admin
-            Invoke-RequireAdmin -MyInvocation $script:MyInvocation
+
 
             Resize-Console
 
