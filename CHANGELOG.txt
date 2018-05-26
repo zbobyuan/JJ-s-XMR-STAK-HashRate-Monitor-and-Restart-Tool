@@ -1,3 +1,11 @@
+Version 4.2.12
+Releae Date: 2018-05-26
+Notes:  Included Grafana Dashboard example
+
+Changes:
+    Removed cpu and memory trackign from grafana output
+    Released new exe
+
 Version 4.2.11
 Releae Date: 2018-05-26
 Notes:  Included Grafana Dashboard example

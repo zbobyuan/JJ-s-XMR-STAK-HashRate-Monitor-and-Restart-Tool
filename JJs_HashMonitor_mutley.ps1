@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.11'
+        $ver = '4.2.12'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
