@@ -689,6 +689,7 @@ Function Run-Miner {
 
         function call-Self {
             $running = $false
+            start-sleep -s 5
             break
         }
 
@@ -859,7 +860,7 @@ Function Run-Miner {
 
             $STAK = "$ScriptDir\$script:STAKfolder\$script:STAKexe"
             If (Test-Path ($STAK)) {
-                log-Write -logstring 'Starting STAK' -fore Yellow -notification 4
+                log-Write -logstring 'Starting STAK' -fore Yellow -notification 2
                 If ($STAKcmdline) {
                     Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder"
                     Start-Process -FilePath $STAK -ArgumentList $STAKcmdline -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
@@ -891,14 +892,14 @@ Function Run-Miner {
         }
 
         function set-STAKVars {
-            log-Write -logstring 'Setting Env Variables for STAK' -fore 0
+            log-Write -logstring 'Setting Env Variables for STAK' -fore 0 -notification 2
 
             [Environment]::SetEnvironmentVariable('GPU_FORCE_64BIT_PTR', '1', 'User')
             [Environment]::SetEnvironmentVariable('GPU_MAX_HEAP_SIZE', '99', 'User')
             [Environment]::SetEnvironmentVariable('GPU_MAX_ALLOC_PERCENT', '99', 'User')
             [Environment]::SetEnvironmentVariable('GPU_SINGLE_ALLOC_PERCENT', '99', 'User')
 
-            log-Write -logstring 'Env Variables for STAK have been set' -fore 0
+            log-Write -logstring 'Env Variables for STAK have been set' -fore 0 -notification 2
         }
 
         function get-RunTime {
@@ -1032,7 +1033,7 @@ Function Run-Miner {
                         [console]::CursorVisible = $false
                     }
                     catch {
-                        Write-Host "Should only see tyhis message in an ide"
+                        Write-Host "Should only see this message in an ide"
                     }
 
                 }
