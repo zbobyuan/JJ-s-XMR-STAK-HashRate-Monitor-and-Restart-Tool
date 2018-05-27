@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.12'
+        $ver = '4.2.13'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -654,7 +654,7 @@ Function Run-Miner {
             ($Force = $false
             )
             log-Write -logstring 'Resetting Video Card(s)...' -fore White -notification 1
-            $allCards = Get-PnpDevice| Where-Object { ($_.friendlyname -in $supported_cards) }
+            $allCards = Get-PnpDevice| Where-Object { ($_.friendlyname -in $supported_cards) -and ($_.Status -NotLike 'Unknown') }
             $erroredCards = Get-PnpDevice| Where-Object { ($_.friendlyname -in $supported_cards) -and ($_.Status -like 'Error') }
             if ($Force) {
                 $d = $allCards
