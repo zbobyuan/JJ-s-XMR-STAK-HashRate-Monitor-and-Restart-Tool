@@ -1,3 +1,10 @@
+Version 4.2.13
+Releae Date: 2018-05-26
+Notes:  Crad reset change to cope with gost cards caused by driver install issues
+
+Changes:
+    Changed card restart to ignore missing devices
+
 Version 4.2.12
 Releae Date: 2018-05-26
 Notes:  Included Grafana Dashboard example
