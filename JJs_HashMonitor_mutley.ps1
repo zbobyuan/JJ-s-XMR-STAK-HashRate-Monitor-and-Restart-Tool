@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.13'
+        $ver = '4.2.14'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -172,6 +172,9 @@ Function Run-Miner {
     # 0 to disable
     # 1 -> 5 Increasing verbosity
     alertLevel = 1
+
+    # How long topause between device resets
+    devwait = 3
   "
 
         #########################################################################
@@ -316,6 +319,13 @@ Function Run-Miner {
         }
         Else {
             $timeout = 60
+        }
+
+        if ($inifilevalues.devwait) {
+            $devwait = [int]$inifilevalues.devwait
+        }
+        Else {
+            $devwait = 60
         }
 
         if ($inifilevalues.STAKstable) {
@@ -493,6 +503,14 @@ Function Run-Miner {
             Write-Verbose -Message "vidTool defined = $vidTool2"
         }
 
+        $poolpath="$ScriptDir\$script:STAKfolder\pools.txt"
+        IF (Test-Path -Path ($poolpath)) {
+            $rawcurrency = Get-Content -Path $poolpath |Where-Object { ($_.Contains('currency')) -notcontains (($_.Contains('#'))) } | Out-String |
+            ConvertFrom-StringData -StringData {($_ -replace ':', '=' -replace '"|,')}
+            $currencyalue=$rawcurrency.currency
+        }
+
+
 
 
         ##########################################################################
@@ -668,11 +686,11 @@ Function Run-Miner {
                     $vCTR = $vCTR + 1
                     log-Write -logstring "Disabling $dev" -fore Red -notification 4
                     $null = Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
-                    Start-Sleep -Seconds 3
+                    Start-Sleep -Seconds $devwait
 
                     log-Write -logstring "Enabling $dev" -fore Blue -notification 4
                     $null = Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
-                    Start-Sleep -Seconds 3
+                    Start-Sleep -Seconds $devwait
                 }
                 log-Write -logstring "$vCTR Video Card(s) Reset" -fore yellow -notification 1
             }
@@ -1518,7 +1536,7 @@ Function Run-Miner {
 
             # Display key settings
             if ($initalRun) {
-                log-Write -fore White -linefeed -logstring "Starting the Hash Monitor Script... $ver" -notification 1
+                log-Write -fore White -linefeed -logstring "Starting the Hash Monitor Script... $ver $currencyalue" -notification 1
                 $initalRun = $false
             }
             Else {

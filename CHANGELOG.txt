@@ -1,6 +1,14 @@
+Version 4.2.14
+Releae Date: 2018-05-28
+Notes:  Enhanced logging, Configurable wait on device reset
+
+Changes:
+    Capture mined currecny for logging
+    exposed wait time between device resets devwait = 3
+
 Version 4.2.13
 Releae Date: 2018-05-26
-Notes:  Crad reset change to cope with gost cards caused by driver install issues
+Notes:  Card reset change to cope with gost cards caused by driver install issues
 
 Changes:
     Changed card restart to ignore missing devices
