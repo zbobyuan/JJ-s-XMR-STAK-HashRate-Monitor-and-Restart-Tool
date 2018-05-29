@@ -5,11 +5,11 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.14'
+        $ver = '4.2.15'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
-        $Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool v $ver Reworked  by Mutl3y"
+        $Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool, Reworked  by Mutl3y v$ver"
         $Host.UI.RawUI.BackgroundColor = 'Black'
 
         ######################################################################################
@@ -540,7 +540,7 @@ Function Run-Miner {
 
             $msgText = "$timeStamp`t  $logstring"
             if ($alertLevel -ge $notification) {
-                If ($smsAddress) {
+                If (($smsAddress) -and ($notification -eq 0)) {
                     Send-MailMessage -From $gUsername -Subject $msgText -To $smsAddress -UseSSL -Port 587 -SmtpServer smtp.gmail.com -Credential $gCredentials
                 }
                 If ($slackUrl) {
@@ -587,15 +587,15 @@ Function Run-Miner {
                     try {
                         $process = Start-Process -FilePath PowerShell.exe -PassThru -Verb Runas -WorkingDirectory $pwd -ArgumentList $argList
                         exit $process.ExitCode
-                        log-Write 'Restarting as Administrator' -fire Red -notification 1
+                        log-Write -logstring 'Restarting as Administrator' -fire Red -notification 1
                     }
                     catch {
-                        log-Write 'Failed to elevate to administrator' -fore Red -notification 1
+                        log-Write -logstring 'Failed to elevate to administrator' -fore Red -notification 0
                         EXIT
                     }
                 }
                 else {
-                    log-Write 'You need to run this as admin for xmrSTAK tomine efficent blocks' -fore Red -notification 1
+                    log-Write -logstring 'You need to run this as admin for xmrSTAK tomine efficent blocks' -fore Red -notification 0
                     EXIT
                 }
 
@@ -640,7 +640,7 @@ Function Run-Miner {
             $CheckEvery = 10
             $NetStatus = $false
 
-            log-Write "Checking network connection to $ComputerName" -fore yellow -notification 2
+            log-write -logstring "Checking network connection to $ComputerName" -fore yellow -notification 2
 
             ## Start the timer
             $timer = [Diagnostics.Stopwatch]::StartNew()
@@ -655,7 +655,7 @@ Function Run-Miner {
                 }
                 ## Stop the loop every $CheckEvery seconds
                 if (-not($NetStatus)) {
-                    log-Write "Connection down: $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 1
+                    log-write -logstring "Connection down: $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 1
                     Start-Sleep -Seconds $CheckEvery
                 }
             }
@@ -700,7 +700,7 @@ Function Run-Miner {
         }
 
         Function Pause-Then-Exit {
-            log-Write -logstring 'Pause for user and exit called' -fore Red -notification 1
+            log-Write -logstring 'Pause for user and exit called' -fore Red -notification 0
             Pause
             EXIT
         }
@@ -889,7 +889,7 @@ Function Run-Miner {
                 }
             }
             Else {
-                log-Write "$script:STAKexe NOT FOUND.. EXITING" -fore Red -notification 1
+                log-write -logstring "$script:STAKexe NOT FOUND.. EXITING" -fore Red -notification 0
                 Write-Host -fore Red `n`n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 Write-Host -fore Red "         $script:STAKexe NOT found. "
                 Write-Host -fore Red "   Can't do much without the miner now can you!"
@@ -904,7 +904,7 @@ Function Run-Miner {
             $stakPROC = Get-Process -Name $prog -ErrorAction SilentlyContinue
             if (-not($stakPROC)) {
                 write-host "$prog"
-                log-Write 'stak exited abnormally, Run manually and check output' -fore red -notification 1
+                log-Write -logstring 'stak exited abnormally, Run manually and check output' -fore red -notification 0
                 Pause-Then-Exit
             }
         }
@@ -1232,7 +1232,7 @@ Function Run-Miner {
                         Restart-Computer -Force
                     }
                     elseif (($startattempt -ge $STAKMaxStartAttempts) -and ($STAKMaxStartAttempts -eq 0) ) {
-                        log-write -froe red "Reboot disabled, stopping here, please investigate STAK startup" -notification 1
+                        log-write -froe red "Reboot disabled, stopping here, please investigate STAK startup" -notification 0
                         Pause-Then-Exit
                     }
                     else {
@@ -1242,7 +1242,7 @@ Function Run-Miner {
             }
             Else {
                 Clear-Host
-                log-Write -logstring 'Unknown failure starting STAK (Daemon failed to start?)' -fore red -notification 1
+                log-Write -logstring 'Unknown failure starting STAK (Daemon failed to start?)' -fore red -notification 0
                 Pause-Then-Exit
             }
         }
@@ -1294,7 +1294,7 @@ Function Run-Miner {
                         $startTestHash = $currTestHash
                     }
                     If ($script:STAKisup) {
-                        log-Write 'STAK was already running, Skipping wait time' -fore Green -notification 5
+                        log-Write -logstring 'STAK was already running, Skipping wait time' -fore Green -notification 5
                         $flag = $true
                         BREAK
                     }
@@ -1476,7 +1476,7 @@ Function Run-Miner {
             }
             Catch {
                 Write-host -fore Red failureMessage
-                log-Write -logstring "Failed to kill $prog" -fore 0 -notification 1
+                log-Write -logstring "Failed to kill $prog" -fore 0 -notification 0
                 Pause-Then-Exit
             }
         }
@@ -1536,7 +1536,7 @@ Function Run-Miner {
 
             # Display key settings
             if ($initalRun) {
-                log-Write -fore White -linefeed -logstring "Starting the Hash Monitor Script... $ver $currencyalue" -notification 1
+                log-Write -logstring "Starting the Hash Monitor Script... $ver $currencyalue" -fore White -linefeed  -notification 1
                 $initalRun = $false
             }
             Else {
@@ -1572,7 +1572,7 @@ Function Run-Miner {
         } while ($running -eq $true) # Keep running until restart triggered, triggered in call-Self
 
         # Setup for next run
-        log-Write "Restart triggered`n`n" -fore Red -notification 1
+        log-write -logstring "Restart triggered`n`n" -fore Red -notification 1
         $running = $true
 
     } while ($active -eq $true) # Used to exit script from anywhwere in code, ignored in fatal driver error

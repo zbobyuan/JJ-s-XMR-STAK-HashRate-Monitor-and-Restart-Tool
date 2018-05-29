@@ -1,5 +1,12 @@
+Version 4.2.15
+Release Date: 2018-05-29
+Notes:  Enhanced alerts
+
+Changes:
+    Modified email so only critical events are sent
+
 Version 4.2.14
-Releae Date: 2018-05-28
+Release Date: 2018-05-28
 Notes:  Enhanced logging, Configurable wait on device reset
 
 Changes:
@@ -7,14 +14,14 @@ Changes:
     exposed wait time between device resets devwait = 3
 
 Version 4.2.13
-Releae Date: 2018-05-26
+Release Date: 2018-05-26
 Notes:  Card reset change to cope with gost cards caused by driver install issues
 
 Changes:
     Changed card restart to ignore missing devices
 
 Version 4.2.12
-Releae Date: 2018-05-26
+Release Date: 2018-05-26
 Notes:  Included Grafana Dashboard example
 
 Changes:
@@ -22,7 +29,7 @@ Changes:
     Released new exe
 
 Version 4.2.11
-Releae Date: 2018-05-26
+Release Date: 2018-05-26
 Notes:  Included Grafana Dashboard example
 
 Changes:
@@ -39,7 +46,7 @@ Notes:
         when your rebooting the host, You can use an internet based service
 
 Version 4.2.10
-Releae Date: 2018-05-25
+Release Date: 2018-05-25
 Notes:  Included dockerfile and directory structure for Grafana
 
 Required:
@@ -52,7 +59,7 @@ Changes:
     Exposed sleeptime between checks in ini file, Affects screen refresh and metric submission to Grafana
 
 Version 4.2.9
-Releae Date: 2018-05-15
+Release Date: 2018-05-15
 Notes:  Moved default Slack url nto ini file so user can disable
 
 Required:
@@ -64,7 +71,7 @@ Changes:
 
 
 Version 4.2.8
-Releae Date: 2018-05-15
+Release Date: 2018-05-15
 Notes:  Integrated notifications, Come say hi https://join.slack.com/t/hashmonitor/signup
 
 Changes:
@@ -87,7 +94,7 @@ Changes:
 
 
 Version 4.2.5
-Releae Date: 2018-05-05
+Release Date: 2018-05-05
 Notes:  First release of Mutl3y's fork
 
 Changes:
