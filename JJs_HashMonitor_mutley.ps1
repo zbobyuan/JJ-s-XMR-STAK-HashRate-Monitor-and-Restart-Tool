@@ -686,11 +686,11 @@ Function Run-Miner {
             $vCTR = 0
             if ($CardResetEnabled -eq 'True') {
                 foreach ($dev in $d) {
+                    $vCTR = $vCTR + 1
                     log-Write -logstring "Disabling $dev" -fore Red -notification 4
                     $null = Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     Start-Sleep -Seconds $devwait
 
-                    $vCTR = $vCTR + 1
                     log-Write -logstring "Enabling $dev" -fore Blue -notification 4
                     $null = Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     Start-Sleep -Seconds $devwait
