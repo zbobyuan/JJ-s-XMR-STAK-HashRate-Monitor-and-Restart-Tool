@@ -1537,7 +1537,8 @@ Function Run-Miner {
 
         ##### MAIN - or The Fun Starts Here #####
         do {
-            $ProgressPreference = 'SilentyContinue' # Disable web request progress bar
+            $ProgressPreference = 'SilentlyContinue' # Disable web request progress bar
+            $ErrorActionPreference='SilentlyContinue' # Keep going
             # Relaunch if not admin
             Invoke-RequireAdmin -MyInvocation $script:MyInvocation
 
