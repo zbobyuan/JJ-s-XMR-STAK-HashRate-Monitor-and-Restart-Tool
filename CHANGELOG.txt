@@ -8,6 +8,9 @@ Notes:
 Changes:
     reboot rule enhancements, always respect reboot rules no matter whats happening,
     elevated low hash rate alert and modified to always report hash rates when it does
+    corrected typo in progressPreference variable
+    added ErrorActionPreference and set to silentlyContinue
+
 
 Version 4.2.15
 Release Date: 2018-05-29
