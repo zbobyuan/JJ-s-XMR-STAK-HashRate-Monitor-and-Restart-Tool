@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.15'
+        $ver = '4.2.16'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -1132,19 +1132,23 @@ Function Run-Miner {
                     Write-Host "GPU's OK" -fore Green
                 }
                 else {
-                    Log-Write -logstring "Checking if reboot enabled: $rebootEnabled" -fore Red -notification 4
-                    if ($rebootEnabled -eq 'True') {
-                        log-Write -logstring "Driver in error state, Restart-Computer in $rebootTimeout" -fore red -notification 1
-                        Start-Sleep -Seconds $rebootTimeout
-                        Restart-Computer -Force
-                        EXIT
-                    }
-                    else {
-                        log-Write -logstring 'Reboot not enabled' -fore red -notification 1
-                        Pause-Then-Exit
-                    }
+                    log-Write -logstring "Driver in error state, Checking if restart is enabled" -fore red -notification 1
+                    reboot-If-Enabled
                 } # End of device test
             } # End of driver error
+        }
+
+        Function Reboot-If-Enabled {
+            Log-Write -logstring "Checking if reboot enabled: $rebootEnabled" -fore Red -notification 4
+            if ($rebootEnabled -eq 'True') {
+                Start-Sleep -Seconds $rebootTimeout
+                Restart-Computer -Force
+                EXIT
+            }
+            else {
+                log-Write -logstring 'Reboot not enabled' -fore red -notification 0
+                Pause-Then-Exit
+            }
         }
 
         Function quickcheckSTAK {
@@ -1185,7 +1189,7 @@ Function Run-Miner {
                 If ($vidToolArray) {
                     Run-Tools -app ($vidToolArray)
                 }
-                set-STAKVars # Set suggested environment variables
+                set-STAKVars # Set  environment variables
                 start-Mining # Start mining software
             }
         }
@@ -1229,7 +1233,7 @@ Function Run-Miner {
                     if (($startattempt -ge $STAKMaxStartAttempts) -and ($STAKMaxStartAttempts -gt 0)) {
                         log-write -fore red "Restarting computer in 10 seconds" -notification 1
                         start-sleep -s 10
-                        Restart-Computer -Force
+                        reboot-If-Enabled
                     }
                     elseif (($startattempt -ge $STAKMaxStartAttempts) -and ($STAKMaxStartAttempts -eq 0) ) {
                         log-write -froe red "Reboot disabled, stopping here, please investigate STAK startup" -notification 0
@@ -1382,7 +1386,7 @@ Function Run-Miner {
                    $ratetocheck
             )
 
-            log-Write -logstring "Low hash rate check triggered: $script:currHash " -fore Red -notification 5
+            log-Write -logstring "Low hash rate check triggered: $script:currHash " -fore Red -notification 2
             $flag = 'False'
             Check-Network # Check we have internet access
             refreshSTAK   # Re-check STAK, Check-Network can be infinate
