@@ -638,12 +638,12 @@ Function Run-Miner {
             $NetworkTimeout = $internetWaitTime
             $ComputerName = 'www.google.co.uk'
             $CheckEvery = 10
-            $NetStatus = $false
 
             log-write -logstring "Checking network connection to $ComputerName" -fore yellow -notification 2
 
             ## Start the timer
             $timer = [Diagnostics.Stopwatch]::StartNew()
+            if ($NetStatus) {Clear-Variable $NetStatus} # Make sure we are running clean
 
             ## Keep in the loop while the $ComputerName is not pingable
             while (-not($NetStatus)) {
@@ -651,12 +651,15 @@ Function Run-Miner {
                 Write-Verbose -Message "Waiting for [$( $ComputerName )] to become connectable ..."
                 ## If the timer has waited greater than or equal to the timeout, throw an exception exiting the loop
                 if ($timer.Elapsed.TotalSeconds -ge $NetworkTimeout) {
+                    log-write -logstring "Connection down exceeded $NetworkTimeout" -fore red -notification 1
                     throw "Timeout exceeded. Giving up on ping availability to [$ComputerName]"
                 }
                 ## Stop the loop every $CheckEvery seconds
                 if (-not($NetStatus)) {
                     log-write -logstring "Connection down: $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 1
                     Start-Sleep -Seconds $CheckEvery
+                } else {
+                    log-write -logstring "Connection up: Check time taken $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 2
                 }
             }
 
@@ -683,11 +686,11 @@ Function Run-Miner {
             $vCTR = 0
             if ($CardResetEnabled -eq 'True') {
                 foreach ($dev in $d) {
-                    $vCTR = $vCTR + 1
                     log-Write -logstring "Disabling $dev" -fore Red -notification 4
                     $null = Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     Start-Sleep -Seconds $devwait
 
+                    $vCTR = $vCTR + 1
                     log-Write -logstring "Enabling $dev" -fore Blue -notification 4
                     $null = Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     Start-Sleep -Seconds $devwait
@@ -1385,8 +1388,8 @@ Function Run-Miner {
                    [int]
                    $ratetocheck
             )
-
-            log-Write -logstring "Low hash rate check triggered: $script:currHash " -fore Red -notification 2
+            $tFormat = get-RunTime -sec ($runTime)
+            log-Write -logstring "Low hash rate check triggered: after $tFormat - Hash rate dropped from $script:maxhash H/s to $script:currHash H/s" -fore Red -notification 1
             $flag = 'False'
             Check-Network # Check we have internet access
             refreshSTAK   # Re-check STAK, Check-Network can be infinate
@@ -1544,7 +1547,7 @@ Function Run-Miner {
                 $initalRun = $false
             }
             Else {
-                log-Write -logstring '== Loop Started ==' -fore Green -notification 1
+                log-Write -logstring '== Loop Started ==' -fore Green -notification 2
             }
 
             Log-Write -logstring "Reboot enabled: $rebootEnabled" -fore 'White' -notification 2
