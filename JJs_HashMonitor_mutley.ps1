@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.16'
+        $ver = '4.2.17'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -658,7 +658,7 @@ Function Run-Miner {
                 if (-not($NetStatus)) {
                     log-write -logstring "Connection down: $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 1
                     Start-Sleep -Seconds $CheckEvery
-                } else {
+                } elseif (($timer.Elapsed).seconds -gt 1) {
                     log-write -logstring "Connection up: Check time taken $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 2
                 }
             }
@@ -710,7 +710,6 @@ Function Run-Miner {
 
         function call-Self {
             $running = $false
-            start-sleep -s 5
             break
         }
 
@@ -1371,6 +1370,7 @@ Function Run-Miner {
 
             If ($script:currHash -lt $minhashrate) {
                 lowratecheck $minhashrate
+                refreshSTAK
             }
 
             If (($flag -eq 'True') -And ($script:currHash -lt $minhashrate)) {
@@ -1398,7 +1398,7 @@ Function Run-Miner {
             $deadTimer = [Diagnostics.Stopwatch]::StartNew()
             # Check if we are connected  to a pool
             while (($script:UpTime -eq 0) -And ($deadTimer.Elapsed -lt $ts)) {
-                write-host -fore red "Conection died, Pausing for up to 60 Seconds for it too recover $( ($deadTimer.Elapsed).Seconds )"
+                write-host -fore red "Conection died, Pausing for up to $ts Seconds for it too recover $( ($deadTimer.Elapsed).Seconds )"
                 Start-Sleep -Seconds 1
                 refreshSTAK
                 $flag = 'True'
@@ -1441,9 +1441,10 @@ Function Run-Miner {
                 $script:currHash = 0
                 call-Self
             }
-            else {
-                refreshSTAK
+            elseif ((($deadTimer.Elapsed).seconds -gt 1) -and ($flag='True'))  {
+                log-Write -logstring "Temporary connection issue > 1s, Recovery time $(($deadTimer.Elapsed).seconds)"  -fore Red -notification 1
             }
+            refreshSTAK
         }
 
         function kill-Process {
