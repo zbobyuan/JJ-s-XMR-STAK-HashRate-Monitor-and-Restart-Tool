@@ -1110,6 +1110,7 @@ Function Run-Miner {
         }
 
         function Supported-Cards-OK {
+            Clear-Variable $d
             $d = Get-PnpDevice| Where-Object { ($_.friendlyname -in $supported_cards) -and ($_.Status -like 'Error') }
             If ($d) {
                 return $false
@@ -1119,14 +1120,16 @@ Function Run-Miner {
             }
         }
 
-        Function test-cards() {
-            if (Supported-Cards-OK) {
+        Function test-cards {
+            $test = (Supported-Cards-OK)
+            if ($test -eq "True") {
                 Write-Host 'Driver Status is OK' -fore Green
-                $flag = 'True'
             }
             else {
-                log-Write -logstring 'Driver in error state, Resetting' -fore red -notification 1
-                reset-VideoCard
+                if ($ResetCardOnStartup -ne 'True') {
+                    log-Write -logstring 'Driver in error state, Resetting' -fore red -notification 1
+                    reset-VideoCard
+                }
                 log-write -logstring 'Re-Checking Driver for error status in 5 seconds' -fore Blue -notification 4
                 Start-Sleep -Seconds 5
                 write-host 'Gpu OK ' (Supported-Cards-OK)
