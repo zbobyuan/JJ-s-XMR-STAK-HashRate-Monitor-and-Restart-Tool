@@ -1,9 +1,23 @@
+Version 4.2.17
+Release Date: 2018-06-01
+Notes:
+    Issue found with the way devices are reset, driver reports ok for a while after a reset
+        a 15 second pause and additional card test when ResetCardOnStartup is activated apears to capture this
+        please let me know of any issues with this via Slack channel happy to asist where I can
+
+Changes:
+    Added addidional test and a pause of 15 seconds on startup to all display drivers to update
+    Added temporary connection failure alerts and logging
+    negated redundant reset cards on startup
+
+
 Version 4.2.16
-Release Date: 2018-0
+Release Date: ---
 Notes:
     Reboot rule change
-    ** Warning Vega's can throw error that starts with hashdrop and ends with   **
-    ** fans going crazy and eventually BSOD a controlled reboot stops this issue.      **
+    ** Warning Vega's can throw error that starts with hashdrop and ends with       **
+    ** fans going crazy and eventually BSOD a controlled reboot stops this issue.   **
+    ** strongly suggest you enable reboots to protect your cards                    **
 
 Changes:
     reboot rule enhancements, always respect reboot rules no matter whats happening,

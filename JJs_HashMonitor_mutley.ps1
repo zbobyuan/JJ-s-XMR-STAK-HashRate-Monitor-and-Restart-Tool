@@ -658,7 +658,7 @@ Function Run-Miner {
                 if (-not($NetStatus)) {
                     log-write -logstring "Connection down: $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 1
                     Start-Sleep -Seconds $CheckEvery
-                } elseif (($timer.Elapsed).seconds -gt 1) {
+                } elseif (($timer.Elapsed).seconds -gt 2) {
                     log-write -logstring "Connection up: Check time taken $($timer.Elapsed.ToString("hh\:mm\:ss") )" -fore red -notification 2
                 }
             }
@@ -1184,6 +1184,9 @@ Function Run-Miner {
                 kill-Process -STAKexe ($STAKexe)
                 if ($ResetCardOnStartup -eq 'True') {
                     reset-VideoCard -force $true
+                    log-Write -logstring "Reset  card on startup, Pausing for 15 seconds to allow driver to error" -fore yellow -notification 1
+                    Start-Sleep -s 15
+                    test-cards
                 }
                 test-cards
                 disable_crossfire
