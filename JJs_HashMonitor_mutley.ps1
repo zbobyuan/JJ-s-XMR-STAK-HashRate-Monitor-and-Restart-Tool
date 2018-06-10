@@ -705,7 +705,7 @@ Function Run-Miner {
                     log-Write -logstring "Disabled $vCTR`t $dev`t time taken $($disableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 1
                     if ($($disableTimer.Elapsed.TotalSeconds) -gt $maxDeviceResetTime)
                     {
-                        log-Write -loigstring "Device took longer than maxDeviceResetTime so checking if reset enabled" -fore red -notification 0
+                        log-Write -logstring "Device took longer than maxDeviceResetTime so checking if reset enabled" -fore red -notification 0
                         Reboot-If-Enabled
                     }
                     Start-Sleep -Seconds $devwait
