@@ -1,8 +1,17 @@
+Version 4.2.18
+Release Date: 2018-06-10
+Notes:
+
+Changes:
+    Logging device reset times with a view to an additional way of capturing device restart issues
+        This is set to always show on Slack if enabled with a view to me correlating these times of our miners to find a good default setting and this allows you to set maxDeviceResetTime
+    maxDeviceResetTime, if disabling a device takes longer than this the device is concidered in error state, in seconds will reboot if enabled, default 2
+
 Version 4.2.17
 Release Date: 2018-06-01
 Notes:
     Issue found with the way devices are reset, driver reports ok for a while after a reset
-        a 15 second pause and additional card test when ResetCardOnStartup is activated apears to capture this
+        a 15 second pause and additional card test when ResetCardOnStartup is activated appears to capture this
         please let me know of any issues with this via Slack channel happy to asist where I can
 
 Changes:

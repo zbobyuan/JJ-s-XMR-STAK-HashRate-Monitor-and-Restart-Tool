@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.17'
+        $ver = '4.2.18'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -23,7 +23,7 @@ Function Run-Miner {
         $script:web = New-Object -TypeName System.Net.WebClient
         $script:ConnectedPool = $null
         $script:TimeShares = $null
-        $supported_cards = @('Radeon Vega Frontier Edition', 'Radeon RX 580 Series', 'Radeon RX Vega')
+        $supported_cards = @('Radeon Vega Frontier Edition', 'Radeon RX 570 Series','Radeon RX 580 Series', 'Radeon RX Vega')
 
         #Initilisation values, Needed for metrics
         $startTestHash = 0
@@ -175,6 +175,10 @@ Function Run-Miner {
 
     # How long topause between device resets
     devwait = 3
+
+    # If a device btakes lkonger than this to disabl;e its concidered in error and a reboot is called
+    maxDeviceResetTime = 3
+
   "
 
         #########################################################################
@@ -326,6 +330,13 @@ Function Run-Miner {
         }
         Else {
             $devwait = 3
+        }
+
+        if ($inifilevalues.maxDeviceResetTime) {
+            $maxDeviceResetTime = [int]$inifilevalues.maxDeviceResetTime
+        }
+        Else {
+            $maxDeviceResetTime = 1
         }
 
         if ($inifilevalues.STAKstable) {
@@ -688,11 +699,22 @@ Function Run-Miner {
                 foreach ($dev in $d) {
                     $vCTR = $vCTR + 1
                     log-Write -logstring "Disabling $dev" -fore Red -notification 4
+                    $disableTimer = [Diagnostics.Stopwatch]::StartNew()
                     $null = Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
+                    $disableTimer.Stop()
+                    log-Write -logstring "Disabled $vCTR`t $dev`t time taken $($disableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 1
+                    if ($($disableTimer.Elapsed.TotalSeconds) -gt $maxDeviceResetTime)
+                    {
+                        log-Write -loigstring "Device took longer than maxDeviceResetTime so checking if reset enabled" -fore red -notification 0
+                        Reboot-If-Enabled
+                    }
                     Start-Sleep -Seconds $devwait
 
                     log-Write -logstring "Enabling $dev" -fore Blue -notification 4
+                    $enableTimer = [Diagnostics.Stopwatch]::StartNew()
                     $null = Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
+                    $enableTimer.Stop()
+                    log-Write -logstring "Enabled $vCTR`t $dev`t time taken $($enableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 1
                     Start-Sleep -Seconds $devwait
                 }
                 log-Write -logstring "$vCTR Video Card(s) Reset" -fore yellow -notification 1
@@ -1110,7 +1132,7 @@ Function Run-Miner {
         }
 
         function Supported-Cards-OK {
-            Clear-Variable $d
+            $d = $null
             $d = Get-PnpDevice| Where-Object { ($_.friendlyname -in $supported_cards) -and ($_.Status -like 'Error') }
             If ($d) {
                 return $false
@@ -1137,7 +1159,7 @@ Function Run-Miner {
                     Write-Host "GPU's OK" -fore Green
                 }
                 else {
-                    log-Write -logstring "Driver in error state, Checking if restart is enabled" -fore red -notification 1
+                    log-Write -logstring "Driver in error state" -fore red -notification 1
                     reboot-If-Enabled
                 } # End of device test
             } # End of driver error
@@ -1146,6 +1168,7 @@ Function Run-Miner {
         Function Reboot-If-Enabled {
             Log-Write -logstring "Checking if reboot enabled: $rebootEnabled" -fore Red -notification 4
             if ($rebootEnabled -eq 'True') {
+                log-Write -logstring "Reboot enabled, Resetting in $rebootTimeout seconds "
                 Start-Sleep -Seconds $rebootTimeout
                 Restart-Computer -Force
                 EXIT
@@ -1186,6 +1209,7 @@ Function Run-Miner {
                     reset-VideoCard -force $true
                     log-Write -logstring "Reset  card on startup, Pausing for 15 seconds to allow driver to error" -fore yellow -notification 1
                     Start-Sleep -s 15
+                    reset-VideoCard
                     test-cards
                 }
                 test-cards
@@ -1545,13 +1569,13 @@ Function Run-Miner {
         ##### MAIN - or The Fun Starts Here #####
         do {
             $ProgressPreference = 'SilentlyContinue' # Disable web request progress bar
-            $ErrorActionPreference='SilentlyContinue' # Keep going
+            #$ErrorActionPreference='SilentlyContinue' # Keep going
             # Relaunch if not admin
             Invoke-RequireAdmin -MyInvocation $script:MyInvocation
 
             # Display key settings
             if ($initalRun) {
-                log-Write -logstring "Starting the Hash Monitor Script... $ver $currencyalue" -fore White -linefeed  -notification 1
+                log-Write -logstring "`n***** Starting the Hash Monitor Script... $ver $currencyalue ********" -fore White -linefeed  -notification 1
                 $initalRun = $false
             }
             Else {

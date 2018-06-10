@@ -15,6 +15,8 @@ Please feel free to provide feedback and enhancement Idea's as your contribution
 For additonal cards to be supported by default please provide me the friendly names found by running the following powershell command on the destination system
     Get-PnpDevice -Class Display 
 
+By default this script sends basic logging info into the Hashmonitor Slack channel, to disable this simply comment out the SlackURL in the hashmonitor.ini file, If you wish to view your logs in the hashmonitor channel please send me a request on Slack to join with your miners hostname and I will add you into out channel    
+
 Example Grafana dashboard screenshot included in repository
 
     This codebase is adapated from JJ's XMR-STAK HashRate Monitor and Restart Tool originally created by Jericho Jones 
