@@ -1168,7 +1168,7 @@ Function Run-Miner {
         Function Reboot-If-Enabled {
             Log-Write -logstring "Checking if reboot enabled: $rebootEnabled" -fore Red -notification 4
             if ($rebootEnabled -eq 'True') {
-                log-Write -logstring "Reboot enabled, Resetting in $rebootTimeout seconds "
+                log-Write -logstring "Reboot enabled, Resetting in $rebootTimeout seconds " -fore red -notification 0
                 Start-Sleep -Seconds $rebootTimeout
                 Restart-Computer -Force
                 EXIT
