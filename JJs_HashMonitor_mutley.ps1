@@ -1209,7 +1209,6 @@ Function Run-Miner {
                     reset-VideoCard -force $true
                     log-Write -logstring "Reset  card on startup, Pausing for 15 seconds to allow driver to error" -fore yellow -notification 1
                     Start-Sleep -s 15
-                    reset-VideoCard
                     test-cards
                 }
                 test-cards
