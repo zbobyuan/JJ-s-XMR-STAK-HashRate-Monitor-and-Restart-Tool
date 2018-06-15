@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.19'
+        $ver = '4.3.0'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -36,6 +36,7 @@ Function Run-Miner {
         $script:GoodShares = 0
         $script:STAKisup = $false
         $script:threadArray = @()
+        $script:nanopoolLastUpdate = 0
 
         $stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
         $runTime = 0
@@ -179,8 +180,16 @@ Function Run-Miner {
     # If a device btakes lkonger than this to disabl;e its concidered in error and a reboot is called
     maxDeviceResetTime = 3
 
+    # expectedCards, How many cards should the script see if everythings OK, Do not exceed actual card count
+    # Updates on the fly if it finds other cards, is used as an aditonal trigger to restart
+    installedCards = 1
+
+
     # enable nanopool stats if those pools are used
     enableNanopool = True
+
+    # Refresh rate for Nanopool stats, Please be sensible or you will get blocked
+    poolStatRefreshRate = 30
 
   "
 
@@ -510,6 +519,23 @@ Function Run-Miner {
             $enableNanopool = 'True'
         }
 
+        # poolStatRefreshRate= Default 30, Minimum 10
+        if ($inifilevalues.poolStatRefreshRate) {
+            [int]$poolStatRefreshRate = $inifilevalues.poolStatRefreshRate
+            if ($poolStatRefreshRate -lt 10) { $poolStatRefreshRate = 10}
+        }
+        else {
+            $poolStatRefreshRate = 30
+        }
+
+        # poolStatRefreshRate= Default 30, Minimum 10
+        if ($inifilevalues.installedCards) {
+            [int]$installedCards = $inifilevalues.installedCards
+
+        }   else {
+            $installedCards = 1
+        }
+
         $logfile = ("$logdir\$log" + "_$( get-date -Format yyyy-MM-dd ).log") # Log what we do by the day
 
 
@@ -720,10 +746,10 @@ Function Run-Miner {
                     $disableTimer = [Diagnostics.Stopwatch]::StartNew()
                     $null = Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     $disableTimer.Stop()
-                    log-Write -logstring "Disabled $vCTR`t $dev`t time taken $($disableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 1
+                    log-Write -logstring "Disabled $vCTR`t $dev`t time taken $($disableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 4
                     if ($($disableTimer.Elapsed.TotalSeconds) -gt $maxDeviceResetTime)
                     {
-                        log-Write -logstring "Device took longer than maxDeviceResetTime so checking if reset enabled" -fore red -notification 0
+                        log-Write -logstring "Device took longer than maxDeviceResetTime to disable" -fore red -notification 0
                         Reboot-If-Enabled
                     }
                     Start-Sleep -Seconds $devwait
@@ -732,7 +758,7 @@ Function Run-Miner {
                     $enableTimer = [Diagnostics.Stopwatch]::StartNew()
                     $null = Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     $enableTimer.Stop()
-                    log-Write -logstring "Enabled $vCTR`t $dev`t time taken $($enableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 1
+                    log-Write -logstring "Enabled $vCTR`t $dev`t time taken $($enableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 4
                     Start-Sleep -Seconds $devwait
                 }
                 log-Write -logstring "$vCTR Video Card(s) Reset" -fore yellow -notification 1
@@ -872,22 +898,20 @@ Function Run-Miner {
             $tpUpTime = get-RunTime -sec ($script:UpTime)
             $displayOutput = "
       ===========================================================
-      Starting Hash Rate:       $script:maxhash H/s 
-      Restart Hash Rate:        $script:rTarget H/s 
-      Current Hash Rate:        $script:currHash H/s 
-      Minimum Hash Rate:        $minhashrate H/s 
-      Monitoring Uptime:        $tmRunTime 
+      Starting Hash Rate:           $script:maxhash H/s
+      Restart Hash Rate:            $script:rTarget H/s
+      Current Hash Rate:            $script:currHash H/s
+      Minimum Hash Rate:            $minhashrate H/s
+      Monitoring Uptime:            $tmRunTime
       ===========================================================
-      Pool:                     $script:ConnectedPool
-      Uptime:                   $tpUpTime
-      Difficulty:               $script:currDiff
-      Total Shares:             $script:TotalShares
-      Good Shares:              $script:GoodShares
-      Good Share Percent:       $script:sharepercent
-      Share Time:               $script:TimeShares
-
-      ===========================================================
-    "
+      Pool:                         $script:ConnectedPool
+      Uptime:                       $tpUpTime
+      Difficulty:                   $script:currDiff
+      Total Shares:                 $script:TotalShares
+      Good Shares:                  $script:GoodShares
+      Good Share Percent:           $script:sharepercent
+      Share Time:                   $script:TimeShares
+      ==========================================================="
 
             Clear-Host
             Write-Host -fore Green $displayOutput
@@ -924,7 +948,7 @@ Function Run-Miner {
 
             $STAK = "$ScriptDir\$script:STAKfolder\$script:STAKexe"
             If (Test-Path ($STAK)) {
-                log-Write -logstring 'Starting STAK' -fore Yellow -notification 2
+                log-Write -logstring 'Starting STAK' -fore Yellow -notification 1
                 If ($STAKcmdline) {
                     Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder"
                     Start-Process -FilePath $STAK -ArgumentList $STAKcmdline -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
@@ -1165,9 +1189,26 @@ Function Run-Miner {
         }
 
         Function test-cards {
+            [int]$boardCount,$null = (clinfo -ErrorAction SilentlyContinue | sls  "Board Name"|sls -n "n/a" ).count
+            if ($boardCount -ge 1) {
+                [int]$boardActual = $boardCount -1
+                log-write -logstring "Device count $boardActual" -fore red -notification 1
+                $deviceinfodebug = (clinfo | sls  "Board Name") -replace 'Board Name:'
+                if ($deviceinfodebug){
+                    log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red
+                }
+                if ($boardActual -lt $installedCards) {
+                    log-write -logstring "Cards seen $boardActual is less than installedCards setting of $installedCards" -fore red -notification 1
+                    Reboot-If-Enabled
+                }
+                if ($boardActual -gt $installedCards) {
+                    $installedCards = $boardActual
+                }
+            }
             $test = (Supported-Cards-OK)
-            if ($test -eq "True") {
-                Write-Host 'Driver Status is OK' -fore Green
+            #if (($test -eq "True") -and ($boardCount -ge 1)){
+            if ($test -eq "True"){
+                    Write-Host 'Driver Status is OK' -fore Green
             }
             else {
                 if ($ResetCardOnStartup -ne 'True') {
@@ -1229,9 +1270,9 @@ Function Run-Miner {
                 kill-Process -STAKexe ($STAKexe)
                 if ($ResetCardOnStartup -eq 'True') {
                     reset-VideoCard -force $true
-                    log-Write -logstring "Reset  card on startup, Pausing for 15 seconds to allow driver to error" -fore yellow -notification 1
-                    Start-Sleep -s 15
-                    test-cards
+                    #log-Write -logstring "Reset  card on startup, Pausing for 15 seconds to allow driver to error" -fore yellow -notification 1
+                    #Start-Sleep -s 15
+                    #test-cards
                 }
                 test-cards
                 disable_crossfire
@@ -1559,40 +1600,42 @@ Function Run-Miner {
                     }
                 }
 
-                if ($enableNanopool -eq 'True'){
-                    try {
-                    nanopoolvars
-                    if ($script:provider -ne 'nanopool') {
-                    log-write -logstring "Not using Nanopool, you are using $script:provider " -fore red -notification 2
-                    } else {
-                        [Decimal]$script:balance = (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr).data
-                        [Decimal]$script:btcprice = [Double]((Get-Nanopool-Metric -coin $script:coin -op prices).data.'price_btc')
-                        [decimal]$script:coinperhour = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash).data.'hour'.'coins'
-                        $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker).data.'h1'
+                if ($enableNanopool -eq 'True') {
+                    if (($runTime - $script:nanopoolLastUpdate) -ge $poolStatRefreshRate) {
+                        try {
+                            nanopoolvars
+                            if ($script:provider -ne 'nanopool') {
+                                log-write -logstring "Not using Nanopool, you are using $script:provider " -fore red -notification 2
+                            }
+                            else {
+                                [Decimal]$script:balance = (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr).data
+                                [Decimal]$script:btcprice = [Double]((Get-Nanopool-Metric -coin $script:coin -op prices).data.'price_btc')
+                                [decimal]$script:coinperhour = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash).data.'hour'.'coins'
+                                $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker).data.'h1'
 
-                        $Metrics.add('balance', $script:balance)
-                        $Metrics.add('btcprice', $script:btcprice)
-                        $Metrics.add('estCoin1hr', $script:coinperhour)
-                        $Metrics.add('avghash1hr', $script:avghash1hr)
-                    }
-                } catch {
-                        log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
+                                $Metrics.add('balance', $script:balance)
+                                $Metrics.add('btcprice', $script:btcprice)
+                                $Metrics.add('estCoin1hr', $script:coinperhour)
+                                $Metrics.add('avghash1hr', $script:avghash1hr)
+                                $script:nanopoolLastUpdate = $runTime
+                            }
+                        }
+                        catch {
+                            log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
+                        }
                     }
                 }
-
-                #write-output $metrics
                 Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort #-Verbose
-                #write-output $Metrics
             }
         }
 
         Function show-Coin-Info {
-    $coininfo = "
-      Pool Balance                $script:balance
-      Estimated coins per hour    $script:coinperhour
-      Price in BTC                $script:btcprice
-      BTC per hour                $($script:coinperhour * $script:btcprice)
-      Hashrate at pool 1hr        $script:avghash1hr
+    $coininfo =
+"      Pool Balance                  $script:balance
+      Estimated coins per hour      $script:coinperhour
+      Price in BTC                  $script:btcprice
+      BTC per hour                  $($script:coinperhour * $script:btcprice)
+      Hashrate at pool 1hr          $script:avghash1hr
 
     "
             write-host -fore green $coininfo
@@ -1658,7 +1701,7 @@ Function Run-Miner {
 
             # Display key settings
             if ($initalRun) {
-                log-Write -logstring "`n***** Starting the Hash Monitor Script... $ver $currencyalue ********" -fore White -linefeed  -notification 1
+                log-Write -logstring "Starting the Hash Monitor Script... $ver $currencyalue ********" -fore White -linefeed  -notification 1
                 $initalRun = $false
             }
             Else {
