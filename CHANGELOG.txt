@@ -1,3 +1,11 @@
+Version 4.2.19
+Release Date: 2018-06-15
+Notes:
+
+Changes:
+    Added nanopool api functionality to track poolside stats, prices and predicted profability features to grafana when using that pool
+
+
 Version 4.2.18
 Release Date: 2018-06-10
 Notes:

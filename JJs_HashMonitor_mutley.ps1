@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.2.18'
+        $ver = '4.2.19'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -77,7 +77,7 @@ Function Run-Miner {
     5
 
     # Height of console, Max 75
-    consoleHeight = 25
+    consoleHeight = 30
 
     # Width of console,  Max 250  
     consoleWidth = 100
@@ -178,6 +178,9 @@ Function Run-Miner {
 
     # If a device btakes lkonger than this to disabl;e its concidered in error and a reboot is called
     maxDeviceResetTime = 3
+
+    # enable nanopool stats if those pools are used
+    enableNanopool = True
 
   "
 
@@ -497,6 +500,16 @@ Function Run-Miner {
             $alertLevel = 1
         }
 
+
+
+        # enableNanopool= True			# Verbosity of notifications, Defaults to 1
+        if ($inifilevalues.enableNanopool) {
+            $enableNanopool = $inifilevalues.enableNanopool
+        }
+        else {
+            $enableNanopool = 'True'
+        }
+
         $logfile = ("$logdir\$log" + "_$( get-date -Format yyyy-MM-dd ).log") # Log what we do by the day
 
 
@@ -513,6 +526,11 @@ Function Run-Miner {
         ForEach ($vidTool2 in $vidToolArray) {
             Write-Verbose -Message "vidTool defined = $vidTool2"
         }
+
+        IF (($enableNanopool -eq 'True') -and (Test-Path -Path 'nanopoolapi.ps1')) {
+            . "$ScriptDir/nanopoolapi.ps1"
+        }
+
 
         $poolpath="$ScriptDir\$script:STAKfolder\pools.txt"
         IF (Test-Path -Path ($poolpath)) {
@@ -867,11 +885,15 @@ Function Run-Miner {
       Good Shares:              $script:GoodShares
       Good Share Percent:       $script:sharepercent
       Share Time:               $script:TimeShares
+
       ===========================================================
     "
 
             Clear-Host
             Write-Host -fore Green $displayOutput
+            if ($script:coinperhour) {
+                show-Coin-Info
+            }
         }
 
         Function Run-Tools {
@@ -1537,9 +1559,46 @@ Function Run-Miner {
                     }
                 }
 
+                if ($enableNanopool -eq 'True'){
+                    try {
+                    nanopoolvars
+                    if ($script:provider -ne 'nanopool') {
+                    log-write -logstring "Not using Nanopool, you are using $script:provider " -fore red -notification 2
+                    } else {
+                        [Decimal]$script:balance = (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr).data
+                        [Decimal]$script:btcprice = [Double]((Get-Nanopool-Metric -coin $script:coin -op prices).data.'price_btc')
+                        [decimal]$script:coinperhour = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash).data.'hour'.'coins'
+                        $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker).data.'h1'
+
+                        $Metrics.add('balance', $script:balance)
+                        $Metrics.add('btcprice', $script:btcprice)
+                        $Metrics.add('estCoin1hr', $script:coinperhour)
+                        $Metrics.add('avghash1hr', $script:avghash1hr)
+                    }
+                } catch {
+                        log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
+                    }
+                }
+
+                #write-output $metrics
                 Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort #-Verbose
+                #write-output $Metrics
             }
         }
+
+        Function show-Coin-Info {
+    $coininfo = "
+      Pool Balance                $script:balance
+      Estimated coins per hour    $script:coinperhour
+      Price in BTC                $script:btcprice
+      BTC per hour                $($script:coinperhour * $script:btcprice)
+      Hashrate at pool 1hr        $script:avghash1hr
+
+    "
+            write-host -fore green $coininfo
+        }
+
+
 
         Function check-Influx {
             if ($grafanaEnabled -eq 'True') {
@@ -1560,6 +1619,31 @@ Function Run-Miner {
                     }
                     Write-Progress -Activity 'Continuing' -Completed -Id 1
                 }
+            }
+        }
+
+        Function nanopoolvars
+        {
+            IF (Test-Path -Path ("$STAKfolder\\pools.txt")) {
+                Write-Verbose  'reading pools.txt'
+                $wallet_address = 'etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB'
+                $worker = 'xmrstackpc'
+                $adr = $wallet_address
+                $coin = 'etn'
+
+                $pool=(($script:ConnectedPool)  -Split ':')[0]
+
+
+                $rawPoolData = Get-Content -Path ("$STAKfolder\\pools.txt") |
+                               Where-Object { ($_.Contains($pool))  } |
+                               Out-String
+
+                $pooldata = $rawPoolData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" | ConvertFrom-StringData
+                $wallet =  $pooldata.'wallet_address'
+                $miner,$null  = $wallet.split('/')
+                $script:adr,$script:worker = $miner.split('.')
+                $coinzone,$script:provider,$null = $pool.split('.')
+                $script:coin,$null = $coinzone.split('-')
             }
         }
         ##### END FUNCTIONS #####
