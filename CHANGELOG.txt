@@ -1,20 +1,27 @@
 Version 4.3.0
 Release Date: 2018-06-16
 Notes:
-    If your using Nanopool this will now report poolside stats, prices and predicted profability
-    improved device reset code, introduced third party app to test gpu's clinfo.exe, I have included this as an
-        executable however you can also compile from source
+    If your using Nanopool this will now report poolside stats, prices and predicted profability, it does this by
+    reading your wallet address and worker id from your pools.txt file, please disable nanopool stats if you do
+    not wish this to happen, this information is not sent anywhere, I respect yuor privacy if you have any concerns
+    please contact me
+
+    If you have another pool which you would like included in a future release please add a request with the url
+    for their api documentation
+
+    improved device reset code, introduced third party app to test gpu's named 'clinfo.exe', I have included this as an
+    executable however you can also compile from source
 
 Changes:
     Added nanopool api refresh rate, minnimum 10, default 30, too often and you will be blocked
     Added clinfo utility to query opencl devices after a reset, exposes error's before trying to start STAK if theres
         issues, using this to work around the wmi refresh issue that causes devices to show as ok when they are in error
     Removed additonal card test and 15 second wait time after device reset as clinfo takes care of exposing device errors
-    changed reset device log info to notificaion level 4
+    Logging device reset times changed to notification level 4, set your notification level to at least 4 to send this data
 
-Requires
+Required
     clinfo.exe, executable included, Source https://github.com/Oblomov/clinfo
-    Personally scanned with malware Bytes, Please report anti false positives from any other software
+    Personally scanned with malware Bytes, Please report anti false positives from any software ASAP.
 
 Version 4.2.19
 Release Date: 2018-06-15
