@@ -58,9 +58,7 @@ If you find this software usefull please donate what you can spare to the above 
     AMD Vega Frontier Edition
     AMD 580 series    
     
-   
-    
-![alt text](https://github.com/mutl3y/JJ-s-XMR-STAK-HashRate-Monitor-and-Restart-Tool/blob/master/grafana_output_demo.png?raw=true)
+![Screenshot](grafana_output_demo.png)
 
      
      
