@@ -58,7 +58,7 @@ If you find this software usefull please donate what you can spare to the above 
     AMD Vega Frontier Edition
     AMD 580 series    
     
-![Screenshot](grafana_output_demo.png)
+![Screenshot](grafana_demo.png)
 
      
      
