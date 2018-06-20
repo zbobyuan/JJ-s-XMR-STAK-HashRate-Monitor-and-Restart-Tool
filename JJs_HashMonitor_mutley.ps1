@@ -528,7 +528,7 @@ Function Run-Miner {
             $poolStatRefreshRate = 30
         }
 
-        # poolStatRefreshRate= Default 30, Minimum 10
+        # installedCards, howmany cards to check for
         if ($inifilevalues.installedCards) {
             [int]$installedCards = $inifilevalues.installedCards
 
