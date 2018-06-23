@@ -23,7 +23,7 @@ Function Run-Miner {
         $script:web = New-Object -TypeName System.Net.WebClient
         $script:ConnectedPool = $null
         $script:TimeShares = $null
-        $supported_cards = @('Radeon Vega Frontier Edition', 'Radeon RX 570 Series','Radeon RX 580 Series', 'Radeon RX Vega')
+        $supported_cards = @('Radeon Vega Frontier Edition', 'Radeon RX 570 Series','Radeon RX 580 Series', 'Radeon RX Vega','Radeon (TM) RX 470 Graphics','Radeon (TM) RX 480 Graphics')
 
         #Initilisation values, Needed for metrics
         $startTestHash = 0

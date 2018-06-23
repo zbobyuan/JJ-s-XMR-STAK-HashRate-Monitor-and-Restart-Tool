@@ -1,3 +1,10 @@
+Version 4.3.1
+Release Date: 2018-06-23
+
+Changes:
+    Added    Radeon (TM) RX 470 Graphics & Radeon (TM) RX 480 Graphics card reset support
+
+
 Version 4.3.0
 Release Date: 2018-06-16
 Notes:
