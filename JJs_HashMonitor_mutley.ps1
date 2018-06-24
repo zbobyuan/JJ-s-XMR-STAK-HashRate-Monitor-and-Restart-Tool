@@ -1669,7 +1669,7 @@ Function Run-Miner {
             $coininfo  | Add-Member -NotePropertyName 'BTC' -NotePropertyValue   $script:btcprice
             $coininfo  | Add-Member -NotePropertyName $( $script:coin ) -NotePropertyValue  $script:coins
             $coininfo  | Add-Member -NotePropertyName "BTC per $coinStats" -NotePropertyValue $( $script:coins * $script:btcprice )
-            $coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue     $script:dollars
+            $coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue $script:dollars
 
 
             $coininfo | Format-Table
