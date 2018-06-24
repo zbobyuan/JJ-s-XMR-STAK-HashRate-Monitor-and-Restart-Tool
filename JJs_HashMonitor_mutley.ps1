@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.3.0'
+        $ver = '4.3.2'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -190,6 +190,9 @@ Function Run-Miner {
 
     # Refresh rate for Nanopool stats, Please be sensible or you will get blocked
     poolStatRefreshRate = 30
+
+    # Estimated pool profotability, minute, day, hour, week, month
+    coinStats = day
 
   "
 
@@ -526,6 +529,14 @@ Function Run-Miner {
         }
         else {
             $poolStatRefreshRate = 30
+        }
+
+
+        if ($inifilevalues.coinStats) {
+            [string]$coinStats = $inifilevalues.coinStats
+        }
+        else {
+            $coinStats = 'day'
         }
 
         # installedCards, howmany cards to check for
@@ -915,7 +926,7 @@ Function Run-Miner {
 
             Clear-Host
             Write-Host -fore Green $displayOutput
-            if ($script:coinperhour) {
+            if ($script:coins) {
                 show-Coin-Info
             }
         }
@@ -1189,11 +1200,11 @@ Function Run-Miner {
         }
 
         Function test-cards {
-            [int]$boardCount,$null = (clinfo -ErrorAction SilentlyContinue | sls  "Board Name"|sls -n "n/a" ).count
+            [int]$boardCount,$null = (clinfo.exe -ErrorAction SilentlyContinue | sls  "Board Name"|sls -n "n/a" ).count
             if ($boardCount -ge 1) {
                 [int]$boardActual = $boardCount -1
                 log-write -logstring "Device count $boardActual" -fore red -notification 1
-                $deviceinfodebug = (clinfo | sls  "Board Name") -replace 'Board Name:'
+                $deviceinfodebug = (clinfo.exe | sls  "Board Name") -replace 'Board Name:'
                 if ($deviceinfodebug){
                     log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red
                 }
@@ -1601,27 +1612,33 @@ Function Run-Miner {
                 }
 
                 if ($enableNanopool -eq 'True') {
-                    if (($runTime - $script:nanopoolLastUpdate) -ge $poolStatRefreshRate) {
+                    if (($runTime - $script:nanopoolLastUpdate) -ge 1) {
+
                         try {
                             nanopoolvars
                             if ($script:provider -ne 'nanopool') {
                                 log-write -logstring "Not using Nanopool, you are using $script:provider " -fore red -notification 2
                             }
                             else {
-                                [Decimal]$script:balance = (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr).data
+                                [Decimal]$script:balance = [math]::Round((Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr).data,4)
                                 [Decimal]$script:btcprice = [Double]((Get-Nanopool-Metric -coin $script:coin -op prices).data.'price_btc')
-                                [decimal]$script:coinperhour = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash).data.'hour'.'coins'
-                                $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker).data.'h1'
+                                [int]$script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker).data.'h1'
+
+                                $profitData=(Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash).data
+                                [decimal]$script:coins = [math]::Round($profitData.$coinStats.'coins',8)
+                                [decimal]$script:dollars = [math]::Round($profitData.$coinStats.'dollars',4)
 
                                 $Metrics.add('balance', $script:balance)
                                 $Metrics.add('btcprice', $script:btcprice)
-                                $Metrics.add('estCoin1hr', $script:coinperhour)
+                                $Metrics.add("estCoin$coinStats", $script:coins)
+                                $Metrics.add("estDollar$coinStats", $script:dollars)
                                 $Metrics.add('avghash1hr', $script:avghash1hr)
                                 $script:nanopoolLastUpdate = $runTime
                             }
                         }
                         catch {
                             log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
+                            write-output $Error
                         }
                     }
                 }
@@ -1630,15 +1647,35 @@ Function Run-Miner {
         }
 
         Function show-Coin-Info {
-    $coininfo =
-"      Pool Balance                  $script:balance
-      Estimated coins per hour      $script:coinperhour
-      Price in BTC                  $script:btcprice
-      BTC per hour                  $($script:coinperhour * $script:btcprice)
-      Hashrate at pool 1hr          $script:avghash1hr
+            $t = $host.ui.RawUI.ForegroundColor
+            $host.ui.RawUI.ForegroundColor = "Green"
 
-    "
-            write-host -fore green $coininfo
+            $coininfoortig = "
+      Pool Balance                  $script:balance
+      Hashrate at pool 1hr          $script:avghash1hr
+      Price in BTC                  $script:btcprice
+
+      Stat Time Range               $coinStats
+      $( $script:coin )             $script:coins
+      BTC                           $( $script:coins * $script:btcprice )
+      Dollars                       $script:dollars
+
+            "
+
+            $coininfo = New-Object PSObject
+
+            $coininfo  | Add-Member -NotePropertyName 'Balance' -NotePropertyValue $script:balance
+            $coininfo  | Add-Member -NotePropertyName 'H/R' -NotePropertyValue $script:avghash1hr
+            $coininfo  | Add-Member -NotePropertyName 'BTC' -NotePropertyValue   $script:btcprice
+            $coininfo  | Add-Member -NotePropertyName $( $script:coin ) -NotePropertyValue  $script:coins
+            $coininfo  | Add-Member -NotePropertyName "BTC per $coinStats" -NotePropertyValue $( $script:coins * $script:btcprice )
+            $coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue     $script:dollars
+
+
+            $coininfo | Format-Table
+            #write-output $coininfo
+            #write-output $coininfoortig
+            $host.ui.RawUI.ForegroundColor = $t
         }
 
 
@@ -1669,10 +1706,10 @@ Function Run-Miner {
         {
             IF (Test-Path -Path ("$STAKfolder\\pools.txt")) {
                 Write-Verbose  'reading pools.txt'
-                $wallet_address = 'etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB'
-                $worker = 'xmrstackpc'
-                $adr = $wallet_address
-                $coin = 'etn'
+#                $wallet_address = 'etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB'
+#                $worker = 'xmrstackpc'
+#                $adr = $wallet_address
+#                $coin = 'etn'
 
                 $pool=(($script:ConnectedPool)  -Split ':')[0]
 
@@ -1681,12 +1718,17 @@ Function Run-Miner {
                                Where-Object { ($_.Contains($pool))  } |
                                Out-String
 
-                $pooldata = $rawPoolData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" | ConvertFrom-StringData
-                $wallet =  $pooldata.'wallet_address'
-                $miner,$null  = $wallet.split('/')
-                $script:adr,$script:worker = $miner.split('.')
-                $coinzone,$script:provider,$null = $pool.split('.')
-                $script:coin,$null = $coinzone.split('-')
+                if ($rawPoolData) {
+                    $pooldata = $rawPoolData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
+                                ConvertFrom-StringData
+                    $wallet = $pooldata.'wallet_address'
+                    $miner, $null = $wallet.split( '/' )
+                    $script:adr, $script:worker = $miner.split( '.' )
+                    $coinzone, $script:provider, $null = $pool.split( '.' )
+                    $script:coin, $null = $coinzone.split( '-' )
+                } else {
+                    log-Write -logstring "Connected pool not found in pools.txt" -fore red -notification 2
+                }
             }
         }
         ##### END FUNCTIONS #####
