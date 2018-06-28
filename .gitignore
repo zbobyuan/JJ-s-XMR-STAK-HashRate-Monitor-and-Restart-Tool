@@ -61,3 +61,5 @@ fabric.properties
 /cast/
 
 /profit.json
+/pools.txt
+/pools.json

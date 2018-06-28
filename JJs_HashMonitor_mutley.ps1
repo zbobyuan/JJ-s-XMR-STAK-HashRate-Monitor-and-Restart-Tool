@@ -1723,10 +1723,6 @@ Function Run-Miner {
         {
             IF (Test-Path -Path ("$STAKfolder\\pools.txt")) {
                 Write-Verbose  'reading pools.txt'
-#                $wallet_address = 'etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB'
-#                $worker = 'xmrstackpc'
-#                $adr = $wallet_address
-#                $coin = 'etn'
 
                 $pool=(($script:ConnectedPool)  -Split ':')[0]
 
