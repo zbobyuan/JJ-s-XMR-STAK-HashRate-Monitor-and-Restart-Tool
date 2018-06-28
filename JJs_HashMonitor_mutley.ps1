@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.3.2'
+        $ver = '4.3.3'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -37,6 +37,7 @@ Function Run-Miner {
         $script:STAKisup = $false
         $script:threadArray = @()
         $script:nanopoolLastUpdate = 0
+        $script:pools = [ Ordered ]@{ }
 
         $stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
         $runTime = 0
@@ -48,13 +49,17 @@ Function Run-Miner {
         #########################################################################
 
         $defaults = "
+
+    #
+    # $ver Default Configuration file
+
     # Log Directory
     logdir = logs
 
     # Logfile
     Logfile = HashMonitor	
 
-    # STAK folder, Seperation for neatness
+    # STAK folder, Seperation for neatness, You should set this ****
     STAKdir = xmr-stak
 
     # The miner. Expects to be in STAKdir folder 
@@ -194,6 +199,9 @@ Function Run-Miner {
     # Estimated pool profotability, minute, day, hour, week, month
     coinStats = day
 
+    # How often to check the order of your pools for profitability, Minimum is 60 seconds but it operations its never going to be that low
+    # Leaving this at 60 for now during testing expect the dewfault herew should be about 20 minutes, It will only be checked during restarts for now
+    proftStatRefreshTime = 60
   "
 
         #########################################################################
@@ -546,6 +554,15 @@ Function Run-Miner {
         }   else {
             $installedCards = 1
         }
+
+        # How often to check profitability
+        if ($inifilevalues.proftStatRefreshTime) {
+            [int]$proftStatRefreshTime = $inifilevalues.proftStatRefreshTime
+            if ($inifilevalues.proftStatRefreshTime -lt 60) {$inifilevalues.proftStatRefreshTime=60}
+        }   else {
+            $proftStatRefreshTime = 300
+        }
+
 
         $logfile = ("$logdir\$log" + "_$( get-date -Format yyyy-MM-dd ).log") # Log what we do by the day
 
@@ -1731,6 +1748,61 @@ Function Run-Miner {
                 }
             }
         }
+
+        Function check-Profit-Stats {
+            Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]$coins
+            )
+            $statsURL = "https://minecryptonight.net/api/rewards?hr=10000&limit=0"
+            $bestURL = $data = $null
+            $uridata = $null
+            $path = "$PSScriptRoot\profit.json"
+            $data = @{ }
+            $supportedCoins = $coins.ToUpper()
+            $bestcoins = [ Ordered ]@{ }
+
+            function get-stats {
+                $uridata = Invoke-WebRequest -UseBasicParsing -Uri $statsURL -TimeoutSec 60
+                $uridata | Set-Content -Path $path
+            }
+
+            # Refresh stats file every 60 seconds
+            if ( ! (Test-Path -path $path ) ) {
+                get-stats
+            }
+            else {
+                $test = Get-Item $path | Where{ $_.LastWriteTime -lt (Get-Date ).AddSeconds( - $proftStatRefreshTime ) }
+                if ( $test ) {
+                    get-stats
+                    write-host "Profit stats refreshed from https://minecryptonight.net/api/rewards "
+                }
+            }
+
+            #Read from profit.json
+            $rawdata = (Get-Content -RAW -Path $path| Out-String | ConvertFrom-Json )
+
+            #Add each coin to an ordered list, Storing each coin's name as the value so item 0 is always best coin
+            foreach ( $coin in $rawdata.rewards ) {
+                #write-host $coin.ticker_symbol $coin.reward_24h.btc
+                if ( ($coin.ticker_symbol ) |Where-Object ({ $_ -in $supportedCoins } ) ) {
+                    $script:pools.Add( [ Decimal ]$coin.reward_24h.btc, $coin.ticker_symbol )
+                }
+                else {
+                    $bestcoins.Add( [ Decimal ]$coin.reward_24h.btc, $coin.ticker_symbol )
+                }
+            }
+
+            #Select top coin
+            log-write -logstring "We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
+            $bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
+            $ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
+            $profitLoss = $bestcoin - $ourcoin
+
+            # Export coin to mine to script
+            $script:coinToMine = $script:pools[ 0 ]
+
+            log-write -logstring "You would have earned $profitLoss more Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 2
+        }
+
         ##### END FUNCTIONS #####
 
 
@@ -1762,6 +1834,8 @@ Function Run-Miner {
 
             Check-Network
 
+            check-Profit-Stats @('etn', 'xmr') # Check which of our pools to mine
+            exit
             quickcheckSTAK  ($script:Url)  # check and start stak if not running
 
             chk-STAK  ($script:Url)        # Wait for STAK to return a hash rate
