@@ -1,58 +1,70 @@
 ﻿Push-Location -Path $PSScriptRoot
-Function log-Write {
-	param ([ Parameter ( Mandatory, HelpMessage = 'String' ) ][ string ]$logstring,
-	       [ Parameter ( Mandatory, HelpMessage = 'Provide colour to display to screen' ) ][ string ]$fore, [ switch ] $linefeed, [ int ] $notification
-	)
-	$timeStamp = (get-Date -format r )
-	if ( $fore -ne '0' ) {
-		Write-Host -Fore $fore "$logstring"
-	}
-}
+$error.clear()
 
+Function log-Write {
+  param ([ Parameter ( Mandatory, HelpMessage = 'String' ) ][ string ]$logstring,
+         [ Parameter ( Mandatory, HelpMessage = 'Provide colour to display to screen' ) ][ string ]$fore, [ switch ] $linefeed,
+         [Parameter(Mandatory=$false)][ int ] $notification
+  )
+  $timeStamp = (get-Date -format r )
+  if ( $fore -ne '0' ) {
+    Write-Host -Fore $fore "$logstring"
+  }
+}
+$minhashrate = 1850
+$STAKfolder = 'xmr-stak'
 
 $PoolsList = @{
-	xmr = @{
-		address = @{
-			address = "xmr-eu1.nanopool.org:14433"
-			weight = 1
-		}
-		wallet = "49QA139gTEVMDV9LrTbx3qGKKEoYJucCtT4t5oUHHWfPBQbKc4MdktXfKSeT1ggoYVQhVsZcPAMphRS8vu8oxTf769NDTMu.xmrstackpc/pass@heynes.biz"
-		rig_id = "xmrstackpc"
-		password = "pass@heynes.biz"
-		use_tls = 'true'
-		algorithm = 'monero7'
+  xmr = @{
+    address = @{
+      address = "xmr-eu1.nanopool.org:14433"
+      weight = 1
+    }
+    wallet_address = "49QA139gTEVMDV9LrTbx3qGKKEoYJucCtT4t5oUHHWfPBQbKc4MdktXfKSeT1ggoYVQhVsZcPAMphRS8vu8oxTf769NDTMu.xmrstackpc/pass@heynes.biz"
+    rig_id = "xmrstackpc"
+    pool_password = "pass@heynes.biz"
+    use_nicehash = $false
+    use_tls = $true
+    tls_fingerprint =''
+    algorithm = 'monero7'
+  }
+  etn = @{
+    address = @{
+      address = "xmr-eu1.nanopool.org:14433"
+      weight = 1
+    }
+    wallet_address = "etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB.xmrstackpc/pass@heynes.biz"
+    rig_id = "xmrstackpc"
+    pool_password = "pass@heynes.biz"
+    use_nicehash = $false
+    use_tls = $true
+    tls_fingerprint =''
+    algorithm = 'monero7'
 	}
-	etn = @{
-		address = @{
-			address = "xmr-eu1.nanopool.org:14433"
-			weight = 1
-		}
-		wallet = "etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB.xmrstackpc/pass@heynes.biz"
-		rig_id = "xmrstackpc"
-		password = "pass@heynes.biz"
-		use_tls = 'true'
-		algorithm = 'monero7'
+  sumo = @{
+    address = @{
+      "pool.sumokoin.hashvault.pro:5555" = 50
+      "london01.sumokoin.hashvault.pro:5555" = 50
+    }
+    wallet_address = "Sumoo13hApaeJmf5eRyukdfVVN13wZcDtEvPqzgzNJ2PDuVY5Z9Mrg2WkZQt5vbHwt8k2xV96aYJSVww33c9R6KNMMUjwcHVjSv"
+    rig_id = "xmrstackpc"
+    pool_password = "pass@heynes.biz"
+    use_nicehash = $false
+    use_tls = $true
+    tls_fingerprint =''
+    algorithm = 'sumokin'
 	}
-	sumo = @{
-		address = @{
-			"pool.sumokoin.hashvault.pro:5555" = 50
-			"london01.sumokoin.hashvault.pro:5555" = 50
-		}
-		wallet = "Sumoo13hApaeJmf5eRyukdfVVN13wZcDtEvPqzgzNJ2PDuVY5Z9Mrg2WkZQt5vbHwt8k2xV96aYJSVww33c9R6KNMMUjwcHVjSv"
-		rig_id = "xmrstackpc"
-		password = "pass@heynes.biz"
-		use_tls = 'true'
-		algorithm = 'sumokin'
-	}
-	msr = @{
-		address = @{
-			"pool.masaricoin.com:5555" = 1
-		}
-		wallet = "5mBTDBeXbNT46sX6HhaoGyazJb2Xu8LBqB83iueKPXGKEW4T2zMayxeWzoCjMFqLeHgYpGk9qykcMhbAttqkhjUkJSQE2zM"
-		rig_id = "xmrstackpc"
-		password = "pass@heynes.biz"
-		use_tls = 'true'
-		algorithm = 'masari'
+  msr = @{
+    address = @{
+      "pool.masaricoin.com:5555" = 1
+    }
+    wallet_address = "5mBTDBeXbNT46sX6HhaoGyazJb2Xu8LBqB83iueKPXGKEW4T2zMayxeWzoCjMFqLeHgYpGk9qykcMhbAttqkhjUkJSQE2zM"
+    rig_id = "xmrstackpc"
+    pool_password = "pass@heynes.biz"
+    use_nicehash = $false
+    use_tls = $false
+    tls_fingerprint =''
+    algorithm = 'masari'
 	}
 }
 
@@ -61,18 +73,20 @@ $PoolsList = @{
 $poolsfile = 'pools.json'
 $PoolsList | ConvertTo-Json -Depth 4 | Set-Content $poolsfile
 
+
+
 $script:PoolsList = @{}
 $script:pools = [ Ordered ]@{ }
 $proftStatRefreshTime = 60
 $profitSwitching = 'True'
-
+$poolsdottext = "test.txt"
 
 function read-Pools-File {
 
 	if ( test-path -path $poolsfile ) {
 		try {
 				$poolData = get-content -RAW  "$PSScriptRoot\$poolsfile"
-		(ConvertFrom-Json $poolData ).psobject.properties | Foreach { $script:PoolsList[ $_.Name ] = $_.Value }
+		(ConvertFrom-Json $poolData ).psobject.properties | ForEach-Object { $script:PoolsList[ $_.Name ] = $_.Value }
 		return $true}
 		catch {return $false}
 	} else {
@@ -87,7 +101,6 @@ Function check-Profit-Stats {
 		[ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][int]$hr
 	)
 	$statsURL = "https://minecryptonight.net/api/rewards?hr=$hr&limit=0"
-	$bestURL = $data = $null
 	$uridata = $null
 	$path = "$PSScriptRoot\profit.json"
 	$data = @{ }
@@ -104,7 +117,7 @@ Function check-Profit-Stats {
 		get-stats
 	}
 	else {
-		$test = Get-Item $path | Where{ $_.LastWriteTime -lt (Get-Date ).AddSeconds( - $proftStatRefreshTime ) }
+		$test = Get-Item $path | Where-Object{ $_.LastWriteTime -lt (Get-Date ).AddSeconds( - $proftStatRefreshTime ) }
 		if ( $test ) {
 			get-stats
 			write-host "Profit stats refreshed from https://minecryptonight.net/api/rewards "
@@ -146,15 +159,50 @@ Function check-Profit-Stats {
 
 function write-xmrstak-Pools-File {
 
-	if ( test-path -path $poolsfile ) {
-		try {
-			$poolData = get-content -RAW  "$PSScriptRoot\$poolsfile"
-			(ConvertFrom-Json $poolData ).psobject.properties | Foreach { $script:PoolsList[ $_.Name ] = $_.Value }
-			return $true}
-		catch {return $false}
-	} else {
-		return $false
-	}
+  $script:poolsdottextContent = '"pool_list" : ['+"`n"
+
+  $poolfile = @{}
+  $pool = @{}
+  $rawobj=$script:PoolsList.($script:coinToMine)
+  $rawobj.psobject.properties | ForEach-Object { $poolfile[$_.Name] = $_.Value }
+  $rawobj.address.psobject.properties | ForEach-Object { $pool[$_.Name] = $_.Value }
+  
+  $footer = '],
+  
+  "currency" : "'+$($poolfile.algorithm)+'",'
+  
+  function write-entry {
+    Param (
+      [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][string]$key,
+      [ Parameter ( Position = 2, Mandatory, ValueFromPipeline ) ][string]$value
+    )
+    $r = $poolfile.Clone()
+    $r.add("pool_address", $key )
+    $r.add("pool_weight" , [int]$value )
+    $r.Remove("address")
+    $r.Remove("algorithm")
+    $l = $r | ConvertTo-Json
+    $script:poolsdottextContent  += ($l + ",`n")
+  }
+  
+
+  if ( test-path -path ("$PSScriptRoot\$STAKfolder") ) {
+    try {
+      log-write -logstring "$poolsdottext" -fore green -notification 1
+  
+      foreach ($p in ($pool).keys) {
+        write-entry $p $pool.$p
+      }
+      $script:poolsdottextContent += $footer
+      $script:poolsdottextContent | Set-Content -Path $poolsdottext       
+    }
+    catch {
+      log-write -logstring "Error Writing pools.txt" -fore red # -notification 1
+      #todo  add pause-and-wait
+    }
+  } else {
+    return $false
+  }
 }
 
 
@@ -163,9 +211,10 @@ function write-xmrstak-Pools-File {
 if ($profitSwitching -eq 'True') {
 	log-write -logstring "Profit switching enabled" -fore green -notification 1
 	if (read-Pools-File) {
-		check-Profit-Stats $script:PoolsList.Keys 7500
+		check-Profit-Stats $script:PoolsList.Keys $minhashrate
+		write-xmrstak-Pools-File
+    get-content -path $poolsdottext
 	} else {
 		log-Write -logstring "Issue reading $PSScriptRoot\pools.txt" -fore red -notification 1
 	}
 }
-

@@ -1656,7 +1656,8 @@ Function Run-Miner {
                         try {
                             nanopoolvars
                             if ($script:provider -ne 'nanopool') {
-                                log-write -logstring "Not using Nanopool, you are using $script:provider " -fore red -notification 2
+                                log-write -logstring "Not using Nanopool, you are using $script:provider Disabling Nanopool stats until next restart" -fore red -notification 1
+                                $enableNanopool = 'False'
                             }
                             else {
                                 [Decimal]$script:balance = [math]::Round((Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr).data,4)
@@ -1752,15 +1753,34 @@ Function Run-Miner {
                 $rawPoolData = Get-Content -Path ("$STAKfolder\\pools.txt") |
                                Where-Object { ($_.Contains($pool))  } |
                                Out-String
+                $rawWalletData = Get-Content -Path ("$STAKfolder\\pools.txt") |
+                                 Where-Object { ($_.Contains('wallet_address'))  } |
+                                 Out-String
 
                 if ($rawPoolData) {
                     $pooldata = $rawPoolData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
                                 ConvertFrom-StringData
+                    $walletdata = $rawWalletData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
+                                ConvertFrom-StringData
+
                     $wallet = $pooldata.'wallet_address'
-                    $miner, $null = $wallet.split( '/' )
-                    $script:adr, $script:worker = $miner.split( '.' )
-                    $coinzone, $script:provider, $null = $pool.split( '.' )
-                    $script:coin, $null = $coinzone.split( '-' )
+
+                    try {
+                        $error.Clear()
+                            if ( $wallet -match '/' ) {
+                            $miner, $null = $wallet.split( '/' )
+                        }
+                        if ( $miner -match '.' ) {
+                            $script:adr, $script:worker = $miner.split( '.' )
+                        }
+                        $coinzone, $script:provider, $null = $pool.split( '.' )
+                        $script:coin, $null = $coinzone.split( '-' )
+                    }
+                    catch {
+                        log-write -logstring "Error reading pools file, disabling nanopool" -fore red -notification 1
+                        $enableNanopool = 'False'
+                        $error
+                    }
                 } else {
                     log-Write -logstring "Connected pool not found in pools.txt" -fore red -notification 2
                 }
@@ -1830,8 +1850,8 @@ Function Run-Miner {
             if ( $script:pools ) {
 
                 log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
-                log-write -logstring "Possible pools earnings per day from stats with a hashrate of $hr H/s" -fore yellow
-                write-host ($script:pools | out-string )
+                log-write -logstring "Possible pools earnings per day from stats with a hashrate of $hr H/s" -fore yellow -notification 2
+                log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 2
                 $bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
                 $ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
                 $profitLoss = $bestcoin - $ourcoin
@@ -1856,8 +1876,8 @@ Function Run-Miner {
             $rawobj.address.psobject.properties | ForEach-Object { $pool[$_.Name] = $_.Value }
 
             $footer = '],
-
-  "currency" : "'+$($poolfile.algorithm)+'",'
+            "currency" : "'+$($poolfile.algorithm)+'",
+            '
 
             function write-entry {
                 Param (
@@ -1885,9 +1905,9 @@ Function Run-Miner {
                     $script:poolsdottextContent | Set-Content -Path "$ScriptDir\$STAKfolder\$poolsdottext"
                 }
                 catch {
-                    log-write -logstring "Error Writing $STAKfolder\$poolsdottext" -fore red # -notification 1
-                    #todo  add pause-and-wait
-                    exit
+                    log-write -logstring "Error Writing $STAKfolder\$poolsdottext" -fore red -notification 1
+                    Pause-Then-Exit
+
                 }
             } else {
                 return $false
@@ -1934,18 +1954,18 @@ function dev-test {
             tls_fingerprint =''
             algorithm = 'sumokin'
         }
-#        msr = @{
-#            address = @{
-#                "pool.masaricoin.com:5555" = 1
-#            }
-#            wallet_address = "5mBTDBeXbNT46sX6HhaoGyazJb2Xu8LBqB83iueKPXGKEW4T2zMayxeWzoCjMFqLeHgYpGk9qykcMhbAttqkhjUkJSQE2zM"
-#            rig_id = "xmrstackpc"
-#            pool_password = "pass@heynes.biz"
-#            use_nicehash = $false
-#            use_tls = $false
-#            tls_fingerprint =''
-#            algorithm = 'masari'
-#        }
+        msr = @{
+            address = @{
+                "pool.masaricoin.com:5555" = 1
+            }
+            wallet_address = "5t5mEm254JNJ9HqRjY9vCiTE8aZALHX3v8TqhyQ3TTF9VHKZQXkRYjPDweT9kK4rJw7dDLtZXGjav2z9y24vXCdRc4mgijA99QZ94AZzaz"
+            rig_id = "xmrstackpc"
+            pool_password = "pass@heynes.biz"
+            use_nicehash = $false
+            use_tls = $false
+            tls_fingerprint =''
+            algorithm = 'cryptonight_masari'
+        }
     }
 
 
