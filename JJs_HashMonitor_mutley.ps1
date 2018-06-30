@@ -38,6 +38,12 @@ Function Run-Miner {
         $script:threadArray = @()
         $script:nanopoolLastUpdate = 0
         $script:pools = [ Ordered ]@{ }
+        $script:PoolsList = @{}
+        $script:pools = [ Ordered ]@{ }
+        $proftStatRefreshTime = 60
+        $profitSwitching = 'True'
+        $poolsdottext = "pools.txt"
+        $poolsfile = 'pools.json'
 
         $stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
         $runTime = 0
@@ -530,13 +536,13 @@ Function Run-Miner {
             $enableNanopool = 'True'
         }
 
-        # poolStatRefreshRate= Default 30, Minimum 10
+        # poolStatRefreshRate= Default 60, Minimum 60
         if ($inifilevalues.poolStatRefreshRate) {
             [int]$poolStatRefreshRate = $inifilevalues.poolStatRefreshRate
-            if ($poolStatRefreshRate -lt 10) { $poolStatRefreshRate = 10}
+            if ($poolStatRefreshRate -lt 60) { $poolStatRefreshRate = 60}
         }
         else {
-            $poolStatRefreshRate = 30
+            $poolStatRefreshRate = 60
         }
 
 
@@ -1281,6 +1287,7 @@ Function Run-Miner {
             $elapsedTimer = [Diagnostics.Stopwatch]::StartNew()
             DO {
                 Try {
+                    $web.DownloadString($script:Url)
                     $null = $web.DownloadString($script:Url)
                     $flag = 'True'
                     $script:STAKisup = $true
@@ -1311,6 +1318,21 @@ Function Run-Miner {
                 If ($vidToolArray) {
                     Run-Tools -app ($vidToolArray)
                 }
+                dev-test
+
+                # Check if profit switching is enabled and generate pools.txt if it is using pools.json
+                if ($profitSwitching -eq 'True') {
+                    log-write -logstring "Profit switching enabled" -fore green -notification 1
+                    if (read-Pools-File) {
+                        check-Profit-Stats $script:PoolsList.Keys $minhashrate
+                        write-xmrstak-Pools-File
+                        write-host "you are using the following pools.txt"
+                        get-content -path "$ScriptDir\$STAKfolder\$poolsdottext"
+                    } else {
+                        log-Write -logstring "Issue reading  $STAKfolder\$poolsdottext" -fore red -notification 1
+                    }
+                }
+
                 set-STAKVars # Set  environment variables
                 start-Mining # Start mining software
             }
@@ -1745,15 +1767,32 @@ Function Run-Miner {
             }
         }
 
+
+
+        function read-Pools-File {
+
+            if ( test-path -path $poolsfile ) {
+                try {
+                    $poolData = get-content -RAW  "$ScriptDir\$poolsfile"
+                    (ConvertFrom-Json $poolData ).psobject.properties | ForEach-Object { $script:PoolsList[ $_.Name ] = $_.Value }
+                    return $true}
+                catch {return $false}
+            } else {
+                return $false
+            }
+        }
+
+
         Function check-Profit-Stats {
-            Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]$coins
+            Param (
+                [ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]$coins,
+                [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][int]$hr
             )
-            $statsURL = "https://minecryptonight.net/api/rewards?hr=10000&limit=0"
-            $bestURL = $data = $null
+            $statsURL = "https://minecryptonight.net/api/rewards?hr=$hr&limit=0"
             $uridata = $null
-            $path = "$PSScriptRoot\profit.json"
+            $path = "$ScriptDir\profit.json"
             $data = @{ }
-            $supportedCoins = $coins.ToUpper()
+            if ($coins) {$supportedCoins = $coins.ToUpper()}
             $bestcoins = [ Ordered ]@{ }
 
             function get-stats {
@@ -1766,7 +1805,7 @@ Function Run-Miner {
                 get-stats
             }
             else {
-                $test = Get-Item $path | Where{ $_.LastWriteTime -lt (Get-Date ).AddSeconds( - $proftStatRefreshTime ) }
+                $test = Get-Item $path | Where-Object{ $_.LastWriteTime -lt (Get-Date ).AddSeconds( - $proftStatRefreshTime ) }
                 if ( $test ) {
                     get-stats
                     write-host "Profit stats refreshed from https://minecryptonight.net/api/rewards "
@@ -1787,17 +1826,135 @@ Function Run-Miner {
                 }
             }
 
-            #Select top coin
-            log-write -logstring "We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
-            $bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
-            $ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
-            $profitLoss = $bestcoin - $ourcoin
+            #Check our pools
+            if ( $script:pools ) {
 
-            # Export coin to mine to script
-            $script:coinToMine = $script:pools[ 0 ]
+                log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
+                log-write -logstring "Possible pools earnings per day from stats with a hashrate of $hr H/s" -fore yellow
+                write-host ($script:pools | out-string )
+                $bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
+                $ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
+                $profitLoss = $bestcoin - $ourcoin
 
-            log-write -logstring "You would have earned $profitLoss more Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 2
+                # Export coin to mine to script
+                $script:coinToMine = $script:pools[ 0 ]
+
+                log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 2
+            } else {
+                log-write -logstring "No compatable entries found in $ScriptDir\pools.txt"
+            }
         }
+
+        function write-xmrstak-Pools-File {
+
+            $script:poolsdottextContent = '"pool_list" : ['+"`n"
+
+            $poolfile = @{}
+            $pool = @{}
+            $rawobj=$script:PoolsList.($script:coinToMine)
+            $rawobj.psobject.properties | ForEach-Object { $poolfile[$_.Name] = $_.Value }
+            $rawobj.address.psobject.properties | ForEach-Object { $pool[$_.Name] = $_.Value }
+
+            $footer = '],
+
+  "currency" : "'+$($poolfile.algorithm)+'",'
+
+            function write-entry {
+                Param (
+                    [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][string]$key,
+                    [ Parameter ( Position = 2, Mandatory, ValueFromPipeline ) ][string]$value
+                )
+                $r = $poolfile.Clone()
+                $r.add("pool_address", $key )
+                $r.add("pool_weight" , [int]$value )
+                $r.Remove("address")
+                $r.Remove("algorithm")
+                $l = $r | ConvertTo-Json
+                $script:poolsdottextContent  += ($l + ",`n")
+            }
+
+
+            if ( test-path -path "$ScriptDir\$STAKfolder" ) {
+                try {
+                    log-write -logstring "Writing $STAKfolder\$poolsdottext" -fore green -notification 1
+                    $pool
+                    foreach ($p in ($pool).keys) {
+                        write-entry $p $pool.$p
+                    }
+                    $script:poolsdottextContent += $footer
+                    $script:poolsdottextContent | Set-Content -Path "$ScriptDir\$STAKfolder\$poolsdottext"
+                }
+                catch {
+                    log-write -logstring "Error Writing $STAKfolder\$poolsdottext" -fore red # -notification 1
+                    #todo  add pause-and-wait
+                    exit
+                }
+            } else {
+                return $false
+            }
+        }
+
+
+function dev-test {
+    $PoolsList = @{
+        xmr = @{
+            address = @{
+                "xmr-eu1.nanopool.org:14433" = 1
+            }
+            wallet_address = "49QA139gTEVMDV9LrTbx3qGKKEoYJucCtT4t5oUHHWfPBQbKc4MdktXfKSeT1ggoYVQhVsZcPAMphRS8vu8oxTf769NDTMu.xmrstackpc/pass@heynes.biz"
+            rig_id = "xmrstackpc"
+            pool_password = "pass@heynes.biz"
+            use_nicehash = $false
+            use_tls = $true
+            tls_fingerprint =''
+            algorithm = 'monero7'
+        }
+        etn = @{
+            address = @{
+                "xmr-eu1.nanopool.org:14433" = 1
+            }
+            wallet_address = "etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB.xmrstackpc/pass@heynes.biz"
+            rig_id = "xmrstackpc"
+            pool_password = "pass@heynes.biz"
+            use_nicehash = $false
+            use_tls = $true
+            tls_fingerprint =''
+            algorithm = 'monero7'
+        }
+        sumo = @{
+            address = @{
+                "pool.sumokoin.hashvault.pro:5555" = 50
+                "london01.sumokoin.hashvault.pro:5555" = 50
+            }
+            wallet_address = "Sumoo13hApaeJmf5eRyukdfVVN13wZcDtEvPqzgzNJ2PDuVY5Z9Mrg2WkZQt5vbHwt8k2xV96aYJSVww33c9R6KNMMUjwcHVjSv"
+            rig_id = "xmrstackpc"
+            pool_password = "pass@heynes.biz"
+            use_nicehash = $false
+            use_tls = $true
+            tls_fingerprint =''
+            algorithm = 'sumokin'
+        }
+#        msr = @{
+#            address = @{
+#                "pool.masaricoin.com:5555" = 1
+#            }
+#            wallet_address = "5mBTDBeXbNT46sX6HhaoGyazJb2Xu8LBqB83iueKPXGKEW4T2zMayxeWzoCjMFqLeHgYpGk9qykcMhbAttqkhjUkJSQE2zM"
+#            rig_id = "xmrstackpc"
+#            pool_password = "pass@heynes.biz"
+#            use_nicehash = $false
+#            use_tls = $false
+#            tls_fingerprint =''
+#            algorithm = 'masari'
+#        }
+    }
+
+
+
+    $poolsfile = 'pools.json'
+    $PoolsList | ConvertTo-Json -Depth 4 | Set-Content $poolsfile
+}
+
+
 
         ##### END FUNCTIONS #####
 
@@ -1830,8 +1987,8 @@ Function Run-Miner {
 
             Check-Network
 
-            check-Profit-Stats @('etn', 'xmr') # Check which of our pools to mine
-            exit
+
+
             quickcheckSTAK  ($script:Url)  # check and start stak if not running
 
             chk-STAK  ($script:Url)        # Wait for STAK to return a hash rate
