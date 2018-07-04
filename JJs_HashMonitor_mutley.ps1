@@ -2,10 +2,9 @@
 Clear-Host
 $startattempt = 0
 
-
 Function Run-Miner {
     do {
-        $ver = '4.3.3'
+        $ver = '4.3.4'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -530,10 +529,10 @@ Function Run-Miner {
 
         # enableNanopool= True			# Verbosity of notifications, Defaults to 1
         if ($inifilevalues.enableNanopool) {
-            $enableNanopool = $inifilevalues.enableNanopool
+            $script:enableNanopool = $inifilevalues.enableNanopool
         }
         else {
-            $enableNanopool = 'True'
+            $script:enableNanopool = 'True'
         }
 
         # poolStatRefreshRate= Default 60, Minimum 60
@@ -587,7 +586,7 @@ Function Run-Miner {
             Write-Verbose -Message "vidTool defined = $vidTool2"
         }
 
-        IF (($enableNanopool -eq 'True') -and (Test-Path -Path 'nanopoolapi.ps1')) {
+        IF (($script:enableNanopool -eq 'True') -and (Test-Path -Path 'nanopoolapi.ps1')) {
             . "$ScriptDir/nanopoolapi.ps1"
         }
 
@@ -1280,6 +1279,7 @@ Function Run-Miner {
             param ([Parameter(Mandatory)]$script:Url
             )
             log-Write -logstring 'Quick Check Stak' -fore yellow -notification 4
+
             $flag = 'False'
             $web = New-Object -TypeName System.Net.WebClient
 
@@ -1287,7 +1287,6 @@ Function Run-Miner {
             $elapsedTimer = [Diagnostics.Stopwatch]::StartNew()
             DO {
                 Try {
-                    $web.DownloadString($script:Url)
                     $null = $web.DownloadString($script:Url)
                     $flag = 'True'
                     $script:STAKisup = $true
@@ -1318,7 +1317,6 @@ Function Run-Miner {
                 If ($vidToolArray) {
                     Run-Tools -app ($vidToolArray)
                 }
-                dev-test
 
                 # Check if profit switching is enabled and generate pools.txt if it is using pools.json
                 if ($profitSwitching -eq 'True') {
@@ -1327,9 +1325,10 @@ Function Run-Miner {
                         check-Profit-Stats $script:PoolsList.Keys $minhashrate
                         write-xmrstak-Pools-File
                         write-host "you are using the following pools.txt"
-                        get-content -path "$ScriptDir\$STAKfolder\$poolsdottext"
+                        get-content -path "$STAKfolder\$poolsdottext"
                     } else {
-                        log-Write -logstring "Issue reading  $STAKfolder\$poolsdottext" -fore red -notification 1
+                        log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
+                        log-write -logstring "Error messages `n $($Error[0].InvocationInfo.line )"
                     }
                 }
 
@@ -1372,7 +1371,7 @@ Function Run-Miner {
 
                 # Check for hanging stak on startup, This can also be caused by setting STAKmin too low
                 if (check-Process -exe $script:STAKexe) {
-                    $startattempt = $startattempt + 1
+                    $startattempt += 1
                     log-Write -fore red -logstring "Abnormal Stak process seems to have hung on strartup or your minhashrate $minhashrate is too low, attempt $startattempt" -notification 1
                     if (($startattempt -ge $STAKMaxStartAttempts) -and ($STAKMaxStartAttempts -gt 0)) {
                         log-write -fore red "Restarting computer in 10 seconds" -notification 1
@@ -1418,6 +1417,41 @@ Function Run-Miner {
 
         }
 
+        function dead-Thread-Check {
+            param ([Parameter(Mandatory)]
+                   $threads
+            )
+            log-write -logstring "Dead thread check" -fore yellow -notification 1
+            $nullThreadsReturned = 0
+
+            foreach ( $thread in $threads ) {
+
+                if ( $thread[0] ) {
+                    write-host "Thread ok $thread"
+                }
+                else {
+                    write-host "null thread"
+                    $nullThreadsReturned += 1
+                }
+
+
+            }
+
+            log-write -logstring "$($threads | convertto-json)" -fore red -notification 1
+
+            log-write -logstring "$nullThreadsReturned dead threads found" -fore yellow -notification 1
+            Start-Sleep -s 3
+            if ($nullThreadsReturned -gt 0) {
+                log-write -logstring "Dead threads detected, Most likely going to need a reboot " -fore red -notification 1
+             #   kill-Process -STAKexe ($STAKexe)
+              #  $script:STAKisup = $false
+               # if ((Supported-Cards-OK) -and ($ResetCardOnStartup -ne 'True')) {
+                #    reset-VideoCard -Force $true
+               # }
+               # $script:currHash = 0
+               # call-Self
+            }
+        }
 
 
         function starting-Hash {
@@ -1437,12 +1471,14 @@ Function Run-Miner {
                     $data = $rawdata | ConvertFrom-Json
                     $rawtotal = ($data.hashrate).total
                     $total = $rawtotal | ForEach-Object { $_ }
+
                     $currTestHash = $total[0]
                     If (!$startTestHash) {
                         $startTestHash = $currTestHash
                     }
                     If ($script:STAKisup) {
                         log-Write -logstring 'STAK was already running, Skipping wait time' -fore Green -notification 5
+                        dead-Thread-Check ($data.hashrate).threads
                         $flag = $true
                         BREAK
                     }
@@ -1473,6 +1509,7 @@ Function Run-Miner {
             $elapsedTimer.Stop()
 
             If (!$currTestHash) {
+                dead-Thread-Check ($data.hashrate).threads
                 Clear-Host
                 log-Write -logstring 'Could not get hashrate... restarting in 3 seconds' -fore Red -notification 1
                 log-Write -logstring "API data from failure `n$rawdata" -fore red -notification 4
@@ -1573,7 +1610,6 @@ Function Run-Miner {
             }
 
             if ($flag -eq 'False') {
-                $tFormat = get-RunTime -sec ($runTime)
                 log-Write -logstring "Restarting Script after $tFormat - Hash rate $script:currHash H/s less than set minimum $ratetocheck H/s" -fore red -notification 1
                 kill-Process -STAKexe ($STAKexe)
                 $script:STAKisup = $false
@@ -1650,14 +1686,14 @@ Function Run-Miner {
                     }
                 }
 
-                if ($enableNanopool -eq 'True') {
+                if ($script:enableNanopool -eq 'True') {
                     if (($runTime - $script:nanopoolLastUpdate) -ge 1) {
 
                         try {
                             nanopoolvars
                             if ($script:provider -ne 'nanopool') {
-                                log-write -logstring "Not using Nanopool, you are using $script:provider Disabling Nanopool stats until next restart" -fore red -notification 1
-                                $enableNanopool = 'False'
+                                log-write -logstring "Not using Nanopool, you are using $script:provider" -fore red -notification 1
+                                $script:enableNanopool = 'False'
                             }
                             else {
                                 [Decimal]$script:balance = [math]::Round((Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr).data,4)
@@ -1711,10 +1747,7 @@ Function Run-Miner {
             $coininfo  | Add-Member -NotePropertyName "BTC per $coinStats" -NotePropertyValue $( $script:coins * $script:btcprice )
             $coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue $script:dollars
 
-
             $coininfo | Format-Table
-            #write-output $coininfo
-            #write-output $coininfoortig
             $host.ui.RawUI.ForegroundColor = $t
         }
 
@@ -1763,23 +1796,23 @@ Function Run-Miner {
                     $walletdata = $rawWalletData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
                                 ConvertFrom-StringData
 
-                    $wallet = $pooldata.'wallet_address'
+                    $wallet = $walletdata.'wallet_address'
 
                     try {
-                        $error.Clear()
                             if ( $wallet -match '/' ) {
                             $miner, $null = $wallet.split( '/' )
                         }
                         if ( $miner -match '.' ) {
                             $script:adr, $script:worker = $miner.split( '.' )
+                        } else {
+                            $script:adr = $miner
                         }
                         $coinzone, $script:provider, $null = $pool.split( '.' )
                         $script:coin, $null = $coinzone.split( '-' )
                     }
                     catch {
                         log-write -logstring "Error reading pools file, disabling nanopool" -fore red -notification 1
-                        $enableNanopool = 'False'
-                        $error
+                        $script:enableNanopool = 'False'
                     }
                 } else {
                     log-Write -logstring "Connected pool not found in pools.txt" -fore red -notification 2
@@ -1816,8 +1849,13 @@ Function Run-Miner {
             $bestcoins = [ Ordered ]@{ }
 
             function get-stats {
-                $uridata = Invoke-WebRequest -UseBasicParsing -Uri $statsURL -TimeoutSec 60
-                $uridata | Set-Content -Path $path
+                try {
+                    $uridata = Invoke-WebRequest -UseBasicParsing -Uri $statsURL -TimeoutSec 60
+                    $uridata | Set-Content -Path $path
+                }
+                catch {
+                    log-write -logstring "Issue updating profit stats, Using last set" -for red -notification 2
+                }
             }
 
             # Refresh stats file every 60 seconds
@@ -1897,12 +1935,12 @@ Function Run-Miner {
             if ( test-path -path "$ScriptDir\$STAKfolder" ) {
                 try {
                     log-write -logstring "Writing $STAKfolder\$poolsdottext" -fore green -notification 1
-                    $pool
                     foreach ($p in ($pool).keys) {
                         write-entry $p $pool.$p
                     }
                     $script:poolsdottextContent += $footer
                     $script:poolsdottextContent | Set-Content -Path "$ScriptDir\$STAKfolder\$poolsdottext"
+
                 }
                 catch {
                     log-write -logstring "Error Writing $STAKfolder\$poolsdottext" -fore red -notification 1
@@ -1912,67 +1950,10 @@ Function Run-Miner {
             } else {
                 return $false
             }
+
         }
 
 
-function dev-test {
-    $PoolsList = @{
-        xmr = @{
-            address = @{
-                "xmr-eu1.nanopool.org:14433" = 1
-            }
-            wallet_address = "49QA139gTEVMDV9LrTbx3qGKKEoYJucCtT4t5oUHHWfPBQbKc4MdktXfKSeT1ggoYVQhVsZcPAMphRS8vu8oxTf769NDTMu.xmrstackpc/pass@heynes.biz"
-            rig_id = "xmrstackpc"
-            pool_password = "pass@heynes.biz"
-            use_nicehash = $false
-            use_tls = $true
-            tls_fingerprint =''
-            algorithm = 'monero7'
-        }
-        etn = @{
-            address = @{
-                "xmr-eu1.nanopool.org:14433" = 1
-            }
-            wallet_address = "etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB.xmrstackpc/pass@heynes.biz"
-            rig_id = "xmrstackpc"
-            pool_password = "pass@heynes.biz"
-            use_nicehash = $false
-            use_tls = $true
-            tls_fingerprint =''
-            algorithm = 'monero7'
-        }
-        sumo = @{
-            address = @{
-                "pool.sumokoin.hashvault.pro:5555" = 50
-                "london01.sumokoin.hashvault.pro:5555" = 50
-            }
-            wallet_address = "Sumoo13hApaeJmf5eRyukdfVVN13wZcDtEvPqzgzNJ2PDuVY5Z9Mrg2WkZQt5vbHwt8k2xV96aYJSVww33c9R6KNMMUjwcHVjSv"
-            rig_id = "xmrstackpc"
-            pool_password = "pass@heynes.biz"
-            use_nicehash = $false
-            use_tls = $true
-            tls_fingerprint =''
-            algorithm = 'sumokin'
-        }
-        msr = @{
-            address = @{
-                "pool.masaricoin.com:5555" = 1
-            }
-            wallet_address = "5t5mEm254JNJ9HqRjY9vCiTE8aZALHX3v8TqhyQ3TTF9VHKZQXkRYjPDweT9kK4rJw7dDLtZXGjav2z9y24vXCdRc4mgijA99QZ94AZzaz"
-            rig_id = "xmrstackpc"
-            pool_password = "pass@heynes.biz"
-            use_nicehash = $false
-            use_tls = $false
-            tls_fingerprint =''
-            algorithm = 'cryptonight_masari'
-        }
-    }
-
-
-
-    $poolsfile = 'pools.json'
-    $PoolsList | ConvertTo-Json -Depth 4 | Set-Content $poolsfile
-}
 
 
 
@@ -1981,8 +1962,9 @@ function dev-test {
 
         ##### MAIN - or The Fun Starts Here #####
         do {
+
             $ProgressPreference = 'SilentlyContinue' # Disable web request progress bar
-            #$ErrorActionPreference='SilentlyContinue' # Keep going
+            $ErrorActionPreference='Continue' # Keep going
             # Relaunch if not admin
             Invoke-RequireAdmin -MyInvocation $script:MyInvocation
 
@@ -1999,15 +1981,11 @@ function dev-test {
             Log-Write -logstring "Reset Cards enabled: $CardResetEnabled" -fore 'White' -notification 2
             Start-Sleep -Seconds 2
 
-
-
             Resize-Console
 
             check-Influx
 
             Check-Network
-
-
 
             quickcheckSTAK  ($script:Url)  # check and start stak if not running
 
