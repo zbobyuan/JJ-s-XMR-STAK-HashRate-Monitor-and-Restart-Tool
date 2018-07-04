@@ -2,8 +2,11 @@ Come say hi
 
 https://join.slack.com/t/hashmonitor/shared_invite/enQtMzcxNDgyMjQ1NzUxLWY2NTA2NDdmNDBhM2QyNzIyNzgyYjNjMjFjYzA3NDZiNDFmYjVjYjEwMWZjNWZiYWUyZDM5OWVkNDY5MmJmMzM
 
-Please see changelog for a detailed enhancement list.
+Please see changelog for a detailed enhancement list, Latest features are 
 
+    Profit switching using predetermined pools
+    Nanopool stats for runtime pool stats
+    
 I initally modified this script for myself after having issues with the amount of dev-mining in other versions due to frequent hash-drops whilst getting my Vega config spot on 
 
 There is an executable version of this script in the releases folder if you prefer that to powershell, 
