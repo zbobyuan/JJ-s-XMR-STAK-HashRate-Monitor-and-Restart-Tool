@@ -1239,7 +1239,6 @@ Function Run-Miner {
                 }
             }
             $test = (Supported-Cards-OK)
-            #if (($test -eq "True") -and ($boardCount -ge 1)){
             if ($test -eq "True"){
                     Write-Host 'Driver Status is OK' -fore Green
             }
@@ -1304,9 +1303,6 @@ Function Run-Miner {
                 kill-Process -STAKexe ($STAKexe)
                 if ($ResetCardOnStartup -eq 'True') {
                     reset-VideoCard -force $true
-                    #log-Write -logstring "Reset  card on startup, Pausing for 15 seconds to allow driver to error" -fore yellow -notification 1
-                    #Start-Sleep -s 15
-                    #test-cards
                 }
                 test-cards
                 disable_crossfire
@@ -1320,7 +1316,8 @@ Function Run-Miner {
 
                 # Check if profit switching is enabled and generate pools.txt if it is using pools.json
                 if ($profitSwitching -eq 'True') {
-                    log-write -logstring "Profit switching enabled" -fore green -notification 1
+
+                     log-write -logstring "Profit switching enabled" -fore green -notification 1
                     if (read-Pools-File) {
                         check-Profit-Stats $script:PoolsList.Keys $minhashrate
                         write-xmrstak-Pools-File
@@ -1443,13 +1440,13 @@ Function Run-Miner {
             Start-Sleep -s 3
             if ($nullThreadsReturned -gt 0) {
                 log-write -logstring "Dead threads detected, Most likely going to need a reboot " -fore red -notification 1
-             #   kill-Process -STAKexe ($STAKexe)
-              #  $script:STAKisup = $false
-               # if ((Supported-Cards-OK) -and ($ResetCardOnStartup -ne 'True')) {
-                #    reset-VideoCard -Force $true
-               # }
-               # $script:currHash = 0
-               # call-Self
+                kill-Process -STAKexe ($STAKexe)
+                $script:STAKisup = $false
+                if ($ResetCardOnStartup -ne 'True') {
+                    reset-VideoCard -Force $true
+                }
+                $script:currHash = 0
+                call-Self
             }
         }
 
@@ -1823,12 +1820,12 @@ Function Run-Miner {
 
 
         function read-Pools-File {
-
             if ( test-path -path $poolsfile ) {
                 try {
-                    $poolData = get-content -RAW  "$ScriptDir\$poolsfile"
+                    $poolData = (Get-Content -Path .\pools.json) -notmatch "^#|^/"| Out-String
                     (ConvertFrom-Json $poolData ).psobject.properties | ForEach-Object { $script:PoolsList[ $_.Name ] = $_.Value }
-                    return $true}
+                    return $true
+                }
                 catch {return $false}
             } else {
                 return $false
@@ -1871,7 +1868,7 @@ Function Run-Miner {
             }
 
             #Read from profit.json
-            $rawdata = (Get-Content -RAW -Path $path| Out-String | ConvertFrom-Json )
+            $rawdata = (Get-Content -RAW -Path $path | Out-String | ConvertFrom-Json )
 
             #Add each coin to an ordered list, Storing each coin's name as the value so item 0 is always best coin
             foreach ( $coin in $rawdata.rewards ) {
@@ -1888,7 +1885,7 @@ Function Run-Miner {
             if ( $script:pools ) {
 
                 log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
-                log-write -logstring "Possible pools earnings per day from stats with a hashrate of $hr H/s" -fore yellow -notification 2
+                log-write -logstring "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow -notification 2
                 log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 2
                 $bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
                 $ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
@@ -1897,7 +1894,7 @@ Function Run-Miner {
                 # Export coin to mine to script
                 $script:coinToMine = $script:pools[ 0 ]
 
-                log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 2
+                log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 1
             } else {
                 log-write -logstring "No compatable entries found in $ScriptDir\pools.txt"
             }
@@ -1964,7 +1961,7 @@ Function Run-Miner {
         do {
 
             $ProgressPreference = 'SilentlyContinue' # Disable web request progress bar
-            $ErrorActionPreference='Continue' # Keep going
+            #$ErrorActionPreference='Continue' # Keep going
             # Relaunch if not admin
             Invoke-RequireAdmin -MyInvocation $script:MyInvocation
 
@@ -1974,7 +1971,7 @@ Function Run-Miner {
                 $initalRun = $false
             }
             Else {
-                log-Write -logstring '== Loop Started ==' -fore Green -notification 2
+                log-Write -logstring '== Loop Started ==' -fore Green -notification 5
             }
 
             Log-Write -logstring "Reboot enabled: $rebootEnabled" -fore 'White' -notification 2
@@ -1998,7 +1995,7 @@ Function Run-Miner {
 
             log-Write -logstring 'Repeat Loop' -fore red -notification 4
 
-            $ProgressPreference = 'Continue'
+
 
             # End of mining loop
         } while ($running -eq $true) # Keep running until restart triggered, triggered in call-Self
@@ -2019,3 +2016,4 @@ $running = $true
 $initalRun = $true
 Run-Miner
 
+$ProgressPreference = 'Continue'
