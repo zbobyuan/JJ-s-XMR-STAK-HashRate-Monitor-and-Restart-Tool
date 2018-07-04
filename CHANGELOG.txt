@@ -1,3 +1,27 @@
+Version 4.3.4
+Release Date 2018-07-04
+
+Changes:
+    Added pool switching based on profit stats from http://minecryptonight.net/, Triggered at startup and at restart
+    of miner, Uses 1Hr stats, stats are saved in the folder as profit.json if you want to review these are also in your
+    logfiles
+    Added dead thread check for when xmr-stak is returning null data due to dead thread, triggers card restart and test
+    Added generate_pool.json.ps1 This creates an example pools.json file for profit switching
+
+
+Notes
+    generate_pool.json.ps1, right mouse click and choose run with powershell
+    This generates an example pools.json using my own pools,  whilst I would be grateful for some hashes this is here
+    to create an example pools.json file for you to edit you are welcome to use them for testing
+
+    You can edit either the powershell script or the pools.json file depending on your preference
+    however you must ensure you comment out entire sections
+
+    pools.json = can have items commented out using / or #  sections start { and end with }, these are verticaly aligned
+    generate_pool.json.ps1 = standard powershell commenting
+
+    if you get a failure to read file message you have made a mistake, if its a bug please report via slack channel
+
 Version 4.3.1
 Release Date: 2018-06-23
 
@@ -28,7 +52,7 @@ Changes:
 
 Required
     clinfo.exe, executable included, Source https://github.com/Oblomov/clinfo
-    Personally scanned with malware Bytes, Please report anti false positives from any software ASAP.
+    Personally scanned with malware Bytes, Please report any false positives from any software ASAP.
 
 Version 4.2.19
 Release Date: 2018-06-15

@@ -40,7 +40,6 @@ Function Run-Miner {
         $script:PoolsList = @{}
         $script:pools = [ Ordered ]@{ }
         $proftStatRefreshTime = 60
-        $profitSwitching = 'True'
         $poolsdottext = "pools.txt"
         $poolsfile = 'pools.json'
 
@@ -207,6 +206,9 @@ Function Run-Miner {
     # How often to check the order of your pools for profitability, Minimum is 60 seconds but it operations its never going to be that low
     # Leaving this at 60 for now during testing expect the dewfault herew should be about 20 minutes, It will only be checked during restarts for now
     proftStatRefreshTime = 60
+
+    # Enable profit switching
+    profitSwitching  = 'False'
   "
 
         #########################################################################
@@ -568,6 +570,12 @@ Function Run-Miner {
             $proftStatRefreshTime = 300
         }
 
+        # Check if profitSwitching is enabled
+        if ($inifilevalues.profitSwitching ) {
+            [string]$profitSwitching  = $inifilevalues.profitSwitching
+        }   else {
+            $profitSwitching  = 'False'
+        }
 
         $logfile = ("$logdir\$log" + "_$( get-date -Format yyyy-MM-dd ).log") # Log what we do by the day
 
@@ -1371,12 +1379,12 @@ Function Run-Miner {
                     $startattempt += 1
                     log-Write -fore red -logstring "Abnormal Stak process seems to have hung on strartup or your minhashrate $minhashrate is too low, attempt $startattempt" -notification 1
                     if (($startattempt -ge $STAKMaxStartAttempts) -and ($STAKMaxStartAttempts -gt 0)) {
-                        log-write -fore red "Restarting computer in 10 seconds" -notification 1
+                        log-write -logstring "Restarting computer in 10 seconds"  -fore red -notification 0
                         start-sleep -s 10
                         reboot-If-Enabled
                     }
                     elseif (($startattempt -ge $STAKMaxStartAttempts) -and ($STAKMaxStartAttempts -eq 0) ) {
-                        log-write -froe red "Reboot disabled, stopping here, please investigate STAK startup" -notification 0
+                        log-write -logstring "Reboot disabled, stopping here, please investigate STAK startup" -fore red -notification 0
                         Pause-Then-Exit
                     }
                     else {
