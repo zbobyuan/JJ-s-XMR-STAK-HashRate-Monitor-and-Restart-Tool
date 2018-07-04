@@ -1432,7 +1432,7 @@ Function Run-Miner {
             foreach ( $thread in $threads ) {
 
                 if ( $thread[0] ) {
-                    write-host "Thread ok $thread"
+                    write-host "Thread ok $($thread[0])"
                 }
                 else {
                     write-host "null thread"
@@ -1441,8 +1441,6 @@ Function Run-Miner {
 
 
             }
-
-            log-write -logstring "$($threads | convertto-json)" -fore red -notification 1
 
             log-write -logstring "$nullThreadsReturned dead threads found" -fore yellow -notification 1
             Start-Sleep -s 3
