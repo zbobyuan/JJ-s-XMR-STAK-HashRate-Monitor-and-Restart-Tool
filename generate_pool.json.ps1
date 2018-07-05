@@ -1,3 +1,5 @@
+
+
 function dev-test {
 	$PoolsList = @{
 		xmr = @{
@@ -11,6 +13,11 @@ function dev-test {
 			use_tls = $true
 			tls_fingerprint =''
 			algorithm = 'monero7'
+			settings = @{
+				hdiff = 500
+				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR','OverdriveNTool.exe -consoleonly -r1 -p1XMR')
+				minhashrate = 4000
+			}
 		}
 		etn = @{
 			address = @{
@@ -23,6 +30,11 @@ function dev-test {
 			use_tls = $true
 			tls_fingerprint =''
 			algorithm = 'monero7'
+			settings = @{
+				hdiff = 500
+				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR','OverdriveNTool.exe -consoleonly -r1 -p1XMR')
+				minhashrate = 4000
+			}
 		}
 		sumo = @{
 			address = @{
@@ -48,13 +60,24 @@ function dev-test {
 			use_tls = $false
 			tls_fingerprint =''
 			algorithm = 'cryptonight_masari'
+			settings = @{
+				hdiff = 600
+				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR', 'OverdriveNTool.exe -consoleonly -r1 -p1XMR')
+				minhashrate = 4000
+				amd = 'msr_amd.txt'
+				nvidia = 'msr_nvidia.txt'
+				cpu = 'msrcpu.txt'
+			}
+
 		}
 	}
 
 
-
+	#$PoolsList | ConvertTo-Json -Depth 4
 	$poolsfile = 'pools.json'
-	$PoolsList | ConvertTo-Json -Depth 4 | Set-Content $poolsfile
+
+	$PoolsList | ConvertTo-Json -Depth 6 | Set-Content $poolsfile
+	get-Content $poolsfile
 }
 
 dev-test

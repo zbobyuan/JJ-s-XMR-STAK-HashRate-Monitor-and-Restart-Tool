@@ -586,12 +586,12 @@ Function Run-Miner {
         $script:STAKPort = $STAKPort
         $script:hdiff = $hdiff
 
-        $vidToolArray = (Get-Content -Path $Path |
+        $script:vidToolArray = (Get-Content -Path $Path |
                          Where-Object { ($_.Contains('_vidTool')) } |
                          ForEach-Object { ConvertFrom-StringData -StringData ($_ -replace '\n-\s+') }).Values
 
-        ForEach ($vidTool2 in $vidToolArray) {
-            Write-Verbose -Message "vidTool defined = $vidTool2"
+        ForEach ($vidTool2 in $script:vidToolArray) {
+            Write-Verbose -Message "Global vidTool defined = $vidTool2"
         }
 
         IF (($script:enableNanopool -eq 'True') -and (Test-Path -Path 'nanopoolapi.ps1')) {
@@ -1308,6 +1308,22 @@ Function Run-Miner {
 
             If (-not($script:STAKisup)) {
                 Clear-Host
+                # Check if profit switching is enabled and generate pools.txt if it is using pools.json
+                if ($profitSwitching -eq 'True') {
+
+                     log-write -logstring "Profit switching enabled" -fore green -notification 1
+                    if (read-Pools-File) {
+                        check-Profit-Stats $script:PoolsList.Keys $minhashrate
+                        get-coin-specific-parameters
+                        write-xmrstak-Pools-File
+                        write-host "Starting mining using the following pools.txt"
+                        get-content -path "$STAKfolder\$poolsdottext"
+                    } else {
+                        log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
+                        log-write -logstring "Error messages `n $($Error[0].InvocationInfo.line )"
+                    }
+                }
+EXIT
                 kill-Process -STAKexe ($STAKexe)
                 if ($ResetCardOnStartup -eq 'True') {
                     reset-VideoCard -force $true
@@ -1318,25 +1334,9 @@ Function Run-Miner {
                 If (!(Supported-Cards-OK)) {
                     reset-VideoCard
                 }
-                If ($vidToolArray) {
-                    Run-Tools -app ($vidToolArray)
+                If ($script:vidToolArray) {
+                    Run-Tools -app ($script:vidToolArray)
                 }
-
-                # Check if profit switching is enabled and generate pools.txt if it is using pools.json
-                if ($profitSwitching -eq 'True') {
-
-                     log-write -logstring "Profit switching enabled" -fore green -notification 1
-                    if (read-Pools-File) {
-                        check-Profit-Stats $script:PoolsList.Keys $minhashrate
-                        write-xmrstak-Pools-File
-                        write-host "you are using the following pools.txt"
-                        get-content -path "$STAKfolder\$poolsdottext"
-                    } else {
-                        log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
-                        log-write -logstring "Error messages `n $($Error[0].InvocationInfo.line )"
-                    }
-                }
-
                 set-STAKVars # Set  environment variables
                 start-Mining # Start mining software
             }
@@ -1527,7 +1527,7 @@ Function Run-Miner {
             }
 
             $script:currHash = $currTestHash
-            $script:rTarget = ($script:maxhash - $hdiff)
+            $script:rTarget = ($script:maxhash - $script:hdiff )
             log-Write -logstring "Starting Hashrate: $script:maxhash H/s	Drop Target Hashrate: $script:rTarget H/s" -fore Green -notification 1
         }
 
@@ -1906,6 +1906,115 @@ Function Run-Miner {
             }
         }
 
+
+        function get-coin-specific-parameters {
+            $poolfile = @{ }
+            $settings = @{ }
+            $rawobj = $script:PoolsList.($script:coinToMine )
+            $rawobj.psobject.properties | ForEach-Object { $poolfile[ $_.Name ] = $_.Value }
+            $rawobj.settings.psobject.properties | ForEach-Object { $settings[ $_.Name ] = $_.Value }
+
+            log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2 -linefeed
+            if ( $settings.hdiff ) {
+                $script:hdiff = ($settings ).hdiff
+            }
+
+            if ( $settings.tools ) {
+                $script:vidToolArray = $settings.tools
+            }
+
+            if ( $settings.minhashrate ) {
+                $script:minhashrate = ($settings ).minhashrate
+            }
+
+            $out = "Settings found"
+            $out += "`n hdiff = $script:hdiff"
+            foreach ( $item in $script:vidToolArray ) {
+                $out += "`n $item"
+            }
+            $out += "`n minhashrate = $script:minhashrate"
+            $out += "`n $($script:amd)"
+            $out += "`n $($script:nvidia)"
+            $out += "`n $($script:cpu)"
+            log-write -logstring $out -fore white -notification 3 -linefeed
+
+            if ( $settings.amd ) {
+                $script:amd = ($settings ).amd
+                if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:amd" ) {
+                    try {
+                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
+                        copy-item ("$ScriptDir\$script:STAKfolder\$script:amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" )
+                    }
+                    catch {
+                        log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
+                    }
+                }
+                else {
+                    log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:amd" ) loading defaults "-fore Red -notification 3 -linefeed
+
+                    if ( test-path -path "$ScriptDir\$script:STAKfolder\default_amd" ) {
+                        $null = (copy-item ("$ScriptDir\$script:STAKfolder\default_amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" ) -force )
+                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\default_amd.txt" )" -fore white -notifucation 3
+                    }
+                    else {
+                        log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\default_amd" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+                        Pause-Then-Exit
+                    }
+                }
+            }
+
+            if ( $settings.nvidia ) {
+                $script:nvidia = ($settings ).nvidia
+                if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:nvidia" ) {
+                    try {
+                        copy-item ("$ScriptDir\$script:STAKfolder\$script:nvidia" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" )
+                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore white -notification 3
+
+                    }
+                    catch {
+                        log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore red -notification 3
+                    }
+                }
+                else {
+                    log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:nvidia" ) loading defaults "-fore Red -notification 3 -linefeed
+                    if ( test-path -path "$ScriptDir\$script:STAKfolder\default_nvidia.txt" ) {
+                        $null = (copy-item ("$ScriptDir\$script:STAKfolder\default_nvidia.txt" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" ) -force )
+                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\default_nvidia.txt" )" -fore white -notification 3
+                    }
+                    else {
+                        log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\default_nvidia.txt" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+                        Pause-Then-Exit
+                    }
+                }
+            }
+
+
+
+            if ( $settings.cpu ) {
+                $script:cpu = ($settings ).cpu
+                if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:cpu" ) {
+                    try {
+                         $null = (copy-item ("$ScriptDir\$script:STAKfolder\$script:cpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) )
+                         log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore white -notification 3
+                    }
+                    catch {
+                        log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore red -notification 3
+                    }
+                }
+                else {
+                    log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:cpu" ) loading defaults  " -fore Red -notification 3 -linefeed
+                    if ( test-path -path "$ScriptDir\$script:STAKfolder\default_cpu.txt" ) {
+                        $null = (copy-item ("$ScriptDir\$script:STAKfolder\default_cpu.txt" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) -force )
+                        log-write -logstring "Copying  $("$ScriptDir\$script:STAKfolder")\default_cpu.txt " -fore white -notification 3
+                    }
+                    else {
+                        log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\default_cpu.txt" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+                        Pause-Then-Exit
+                    }
+                }
+            }
+        }
+
         function write-xmrstak-Pools-File {
 
             $script:poolsdottextContent = '"pool_list" : ['+"`n"
@@ -1930,6 +2039,10 @@ Function Run-Miner {
                 $r.add("pool_weight" , [int]$value )
                 $r.Remove("address")
                 $r.Remove("algorithm")
+                $r.Remove("settings")
+                $r.Remove("amd_txt")
+                $r.Remove("nvidia_txt")
+                $r.Remove("cpu_txt")
                 $l = $r | ConvertTo-Json
                 $script:poolsdottextContent  += ($l + ",`n")
             }
@@ -1973,7 +2086,7 @@ Function Run-Miner {
 
             # Display key settings
             if ($initalRun) {
-                log-Write -logstring "Starting the Hash Monitor Script... $ver $currencyalue ********" -fore White -linefeed  -notification 1
+                log-Write -logstring "Starting the Hash Monitor Script... $ver "-fore White -linefeed  -notification 1
                 $initalRun = $false
             }
             Else {
