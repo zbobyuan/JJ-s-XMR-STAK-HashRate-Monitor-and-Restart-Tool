@@ -1271,7 +1271,7 @@ Function Run-Miner {
 			$windowsPrincipal = new-object -TypeName System.Security.Principal.WindowsPrincipal -ArgumentList ($windowsID )
 
 			# Get the Admin role security principal
-			$adminRole = [ Security.Principal.WindowsBuiltInRole ] :: Administrator
+			$adminRole = [ Security.Principal.WindowsBuiltInRole ]::Administrator
 
 			# Are we an admin role?
 			if ( $windowsPrincipal.IsInRole( $adminRole ) ) {
@@ -1293,7 +1293,7 @@ Function Run-Miner {
 
 				# Is it a mapped drive?
 				if ( $psdrive.DisplayRoot ) {
-					$Path = $Path.Replace( $psdrive.Name + [ io.path ] :: VolumeSeparatorChar,
+					$Path = $Path.Replace( $psdrive.Name + [ io.path ]::VolumeSeparatorChar,
 					                       $psdrive.DisplayRoot )
 				}
 			}
@@ -1896,11 +1896,13 @@ Function Run-Miner {
 
 
 				if ( $script:lastRoomTemp ) {
-					if ( $script:timeDrift -lt ($sleeptime + 60 ) ) {
-						log-write -logstring "Last room Temp $( $script:lastRoomTemp )" -fore yellow -notification 3
-						$Metrics.add( "Room_Temp", ($script:lastRoomTemp ).OuterTemp )
+					if ( $true) #$script:timeDrift -gt ($sleeptime + 60 ) )
+					 {
+						$t = [Decimal]($script:lastRoomTemp ).OuterTemp
+						$Metrics.add( "Room_Temp_float", $t )
 					}
 				}
+
 
 				if ( $script:enableNanopool -eq 'True' ) {
 					if ( ($runTime - $script:nanopoolLastUpdate ) -ge 1 ) {
@@ -1935,7 +1937,7 @@ Function Run-Miner {
 						}
 					}
 				}
-				Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort #-Verbose
+				Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort # -Verbose
 			}
 		}
 
