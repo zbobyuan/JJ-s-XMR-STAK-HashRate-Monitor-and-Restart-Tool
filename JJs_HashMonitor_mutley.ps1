@@ -601,7 +601,8 @@ Function Run-Miner {
 #            $currencyalue=$rawcurrency.currency
         }
 
-        $clinfo = "$ScriptDir\clinfo.exe -ErrorAction SilentlyContinue"
+
+        #clinfo.exe -ErrorAction SilentlyContinue = "$ScriptDir\clinfo.exe -ErrorAction SilentlyContinue"
 
 
         ##########################################################################
@@ -1386,13 +1387,13 @@ Function Run-Miner {
         }
 
         Function test-cards {
-            [int]$boardCount,$null = ($clinfo | Select-String  "Board Name"|Select-String -n "n/a" ).count
+            [int]$boardCount,$null = (clinfo.exe -ErrorAction SilentlyContinue | sls  "Board Name"|sls -n "n/a" ).count
             if ($boardCount -ge 1) {
                 [int]$boardActual = $boardCount -1
                 log-write -logstring "Device count $boardActual" -fore red -notification 1
-                $deviceinfodebug = ($clinfo | Select-String  "Board Name") -replace 'Board Name:'
+                $deviceinfodebug = (clinfo.exe | sls  "Board Name") -replace 'Board Name:'
                 if ($deviceinfodebug){
-                    log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red
+                    log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red -notification 3
                 }
                 if ($boardActual -lt $installedCards) {
                     log-write -logstring "Cards seen $boardActual is less than installedCards setting of $installedCards" -fore red -notification 1
