@@ -4,7 +4,7 @@ $startattempt = 0
 
 Function Run-Miner {
     do {
-        $ver = '4.3.4'
+        $ver = '4.3.5'
         $debug = $false
 
         Push-Location -Path $PSScriptRoot
@@ -190,25 +190,24 @@ Function Run-Miner {
     maxDeviceResetTime = 3
 
     # expectedCards, How many cards should the script see if everythings OK, Do not exceed actual card count
-    # Updates on the fly if it finds other cards, is used as an aditonal trigger to restart
+    # Updates on the fly if it finds other cards, this is used as an aditonal trigger for restarting
     installedCards = 1
 
-
-    # enable nanopool stats if those pools are used
+    # enable nanopool stats if those pools are used, Will auto disable if mining another pool
     enableNanopool = True
 
-    # Refresh rate for Nanopool stats, Please be sensible or you will get blocked
-    poolStatRefreshRate = 30
+    # Refresh rate for Nanopool stats, Please be sensible or you will get blocked,Minimun 60 seconds
+    poolStatRefreshRate = 60
 
-    # Estimated pool profotability, minute, day, hour, week, month
+    # Estimated pool profitability, minute, day, hour, week, month, Default is day
     coinStats = day
 
-    # How often to check the order of your pools for profitability, Minimum is 60 seconds but it operations its never going to be that low
-    # Leaving this at 60 for now during testing expect the dewfault herew should be about 20 minutes, It will only be checked during restarts for now
+    # How often to check the order of your pools for profitability, Minimum is 60 seconds but it operation its never going to be that low
+    # Leaving this at 60 for now during testing expect the default here should be about 20 minutes, It will only be checked during restarts for now
     proftStatRefreshTime = 60
 
-    # Enable profit switching
-    profitSwitching  = 'False'
+    # Enable profit switching, Please read the ProfitReadme.md before enabling this
+    profitSwitching  = False
   "
 
         #########################################################################
@@ -554,7 +553,7 @@ Function Run-Miner {
             $coinStats = 'day'
         }
 
-        # installedCards, howmany cards to check for
+        # installedCards, how many cards to check for
         if ($inifilevalues.installedCards) {
             [int]$installedCards = $inifilevalues.installedCards
 
@@ -594,19 +593,15 @@ Function Run-Miner {
             Write-Verbose -Message "Global vidTool defined = $vidTool2"
         }
 
-        IF (($script:enableNanopool -eq 'True') -and (Test-Path -Path 'nanopoolapi.ps1')) {
-            . "$ScriptDir/nanopoolapi.ps1"
-        }
-
 
         $poolpath="$ScriptDir\$script:STAKfolder\pools.txt"
         IF (Test-Path -Path ($poolpath)) {
             $rawcurrency = Get-Content -Path $poolpath |Where-Object { ($_.Contains('currency')) -notcontains (($_.Contains('#'))) } | Out-String |
             ConvertFrom-StringData -StringData {($_ -replace ':', '=' -replace '"|,')}
-            $currencyalue=$rawcurrency.currency
+#            $currencyalue=$rawcurrency.currency
         }
 
-
+        $clinfo = "$ScriptDir\clinfo.exe -ErrorAction SilentlyContinue"
 
 
         ##########################################################################
@@ -617,7 +612,7 @@ Function Run-Miner {
         #####  BEGIN FUNCTIONS #####
         Function log-Write {
             param ([Parameter(Mandatory, HelpMessage = 'String')][string]$logstring,
-                   [Parameter(Mandatory, HelpMessage = 'Provide colour to display to screen')][string]$fore, [switch] $linefeed, [int] $notification
+                   [Parameter(Mandatory, HelpMessage = 'Provide colour to display to screen')][string]$fore, [switch] $linefeed, [Parameter(Mandatory=$true)][int] $notification
 
             )
             $timeStamp = (get-Date -format r)
@@ -645,11 +640,173 @@ Function Run-Miner {
             }
         }
 
+        function Get-Nanopool-Metric
+        {
+
+            [OutputType([int])]
+            Param
+            (
+            # Which coin to check
+                [Parameter(Mandatory,HelpMessage='You must specify a coin',ValueFromPipelineByPropertyName)]
+                [string]
+                $coin,
+
+            # Over how many hours
+            #[Parameter(Mandatory=$true)][int]
+                [int]
+                $Xhrs,
+
+            # Operation to be performed
+                [Parameter(Mandatory=$true)][string]
+                $op,
+
+            # Hashrate to use in calculations
+                [decimal]
+                $hashrate,
+
+            # Offset to use
+                [int]
+                $offset,
+
+            # Count
+                [int]
+                $count
+            )
+
+
+            DynamicParam {
+                # Create a parameter dictionary
+                $paramDictionary = New-Object -TypeName System.Management.Automation.RuntimeDefinedParameterDictionary
+
+                # Check if op needs as wallet address
+                if (($op -notin ('approximated_earnings','block_stats','blocks','network_avgblocktime', 'network_lastblocknumber', 'network_timetonextepoch', 'pool_activeminers', 'pool_activeworkers', 'pool_hashrate', 'pool_topminers', 'prices') -and ($op)))
+                {
+                    Write-Verbose -Message ('wallet check {0}' -f $op)
+                    $walletattribute = New-Object -TypeName System.Management.Automation.ParameterAttribute
+                    #$walletattribute.Position = 6
+                    $walletattribute.Mandatory = $true
+                    $walletattribute.HelpMessage = 'I need a wallet address for this'
+
+                    #create an attributecollection object for the attribute we just created.
+                    $attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[System.Attribute]
+
+                    #add our custom attribute
+                    $attributeCollection.Add($walletattribute)
+
+                    #add our paramater specifying the attribute collection
+                    $walletparam = New-Object -TypeName System.Management.Automation.RuntimeDefinedParameter -ArgumentList ('wallet', [string], $attributeCollection)
+
+                    #expose the name of our parameter
+                    $paramDictionary.Add('wallet', $walletparam)
+                }
+
+                # Check if op needs a worker address
+                if (($op -in ('avghashrateworker','avghashratelimited','avghashrateworkers','hashratechart','history','pool_activeworkers','reportedhashrate','shareratehistory','workers')))
+                {
+                    Write-Verbose -Message ('Worker check {0}' -f $op)
+                    #create a new ParameterAttribute Object
+                    $workerattribute = New-Object -TypeName System.Management.Automation.ParameterAttribute
+                    #$workerattribute.Position = 7
+                    $workerattribute.Mandatory = $true
+                    $workerattribute.HelpMessage = 'I need a worker name for this'
+
+                    #create an attributecollection object for the attribute we just created.
+                    $attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[System.Attribute]
+
+                    #add our custom attribute
+                    $attributeCollection.Add($workerattribute)
+
+                    #add our paramater specifying the attribute collection
+                    $workerparam = New-Object -TypeName System.Management.Automation.RuntimeDefinedParameter -ArgumentList ('worker', [string], $attributeCollection)
+
+                    #expose the name of our parameter
+                    $paramDictionary.Add('worker', $workerparam)
+
+
+                }
+
+                return $paramDictionary
+            }
+
+            Begin    {
+                if ($PSBoundParameters.wallet) { $wallet = $PSBoundParameters.wallet}
+                if ($PSBoundParameters.worker) { $worker = $PSBoundParameters.worker}
+                #Write-Verbose -Message "Nanopool API for $coin $op $wallet $worker"
+                $null = 'True'
+
+                # Select Operation
+                $stat = switch ($op)
+                {
+                    'accountexist'             {                      ('accountexist/{0}' -f $wallet)                   }
+                    'approximated_earnings'    {                      ('approximated_earnings/{0}' -f $hashrate)        }
+                    'avghashrate'              {                      ('avghashrate/{0}' -f $wallet)                    }
+                    'avghashrateworker'        {                      ('avghashrate/{0}/{1}' -f $wallet, $worker)            }
+                    'avghashratelimited'       {                      ('avghashratelimited/{0}/{1}/{2}' -f $wallet, $worker, $Xhrs)  }
+                    'avghashratelimited'       {                      ('avghashratelimited/{0}/{1}' -f $wallet, $Xhrs)          }
+                    'avghashrateworkers'       {                      ('avghashrateworkers/{0}' -f $wallet)                }
+                    'balance'                  {                      ('balance/{0}' -f $wallet)                           }
+                    'balance_hashrate'         {                      ('balance_hashrate/{0}' -f $wallet)                  }
+                    'balance_unconfirmed'      {                      ('balance_unconfirmed/{0}' -f $wallet)               }
+                    'block_stats'              {                      ('block_stats/{0}/{1}' -f $offset, $count)             }
+                    'blocks'                   {                      ('blocks/{0}/{1}' -f $offset, $count)                  }
+                    'hashrate'                 {                      ('hashrate/{0}' -f $wallet)                       }
+                    'hashratechart'            {                      ('hashratechart/{0}/{1}' -f $wallet, $worker)          }
+                    'hashratechart'            {                      ('hashratechart/{0}' -f $wallet)                  }
+                    'history'                  {                      ('history/{0}' -f $wallet)                        }
+                    'history'                  {                      ('history/{0}/{1}' -f $wallet, $worker)                }
+                    'network_avgblocktime'     {                      'network/avgblocktime'                   }
+                    'network_lastblocknumber'  {                      'network/lastblocknumber'                }
+                    'network_timetonextepoch'  {                      'network/timetonextepoch'                }
+                    'payments'                 {                      ('payments/{0}' -f $wallet)                       }
+                    'paymentsday'              {                      ('paymentsday/{0}' -f $wallet)                    }
+                    'pool_activeminers'        {                      'pool/activeminers'                      }
+                    'pool_activeworkers'       {                      'pool/activeworkers'                     }
+                    'pool_hashrate'            {                      'pool/hashrate'                          }
+                    'pool_topminers'           {                      'pool/topminers'                         }
+                    'prices'                   {                      'prices'                                 }
+                    'reportedhashrate'         {                      ('reportedhashrate/{0}' -f $wallet)               }
+                    'reportedhashrate'         {                      ('reportedhashrate/{0}/{1}' -f $wallet, $worker)       }
+                    'reportedhashrates'        {                      ('reportedhashrates/{0}' -f $wallet)              }
+                    'shareratehistory'         {                      ('shareratehistory/{0}' -f $wallet)               }
+                    'shareratehistory'         {                      ('shareratehistory/{0}/{1}' -f $wallet, $worker)       }
+                    'shareratehistory'         {                      ('shareratehistory/{0}/{1}' -f $wallet, $Xhrs)         }
+                    'user'                     {                      ('user/{0}' -f $wallet)                           }
+                    'usersettings'             {                      ('usersettings/{0}' -f $wallet)                   }
+                    'workers'                  {                      ('workers/{0}' -f $wallet)                        }
+                    default                    {                      'prices'                        }
+                }
+                $timeStamp = '{0:yyyy-MM-dd_HH:mm}' -f (Get-Date)
+            }
+
+            Process    {
+                Try {
+                    $data = $null
+                    $null = $null
+                    $data = @{}
+                    $rawdata = Invoke-WebRequest -UseBasicParsing -Uri $url/$coin/$stat -TimeoutSec 60
+                    $null = 'True'
+                    Write-Verbose -Message ("{0}`t Nanopool API call  `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata) #-verbose
+                }
+                Catch
+                {
+
+                    Write-Verbose -Message ("{0}`t Nanopool issue with API call `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata) -Verbose
+                    $null = 'False'
+                }
+            }
+
+            End    {
+                $data = $rawdata | ConvertFrom-Json
+                return $data
+            }
+        }
+
+
         function Send-SlackMessage {
             $slackBody = @{ text = $msgText; channel = $slackChannel; username = $slackUsername; icon_emoji = $slackEmoji; icon_url = $slackIconUrl } |
                          ConvertTo-Json
             try {
-                Invoke-WebRequest -UseBasicParsing -Method Post -Uri $slackUrl -Body $slackBody | Out-Null
+                $null = Invoke-WebRequest -UseBasicParsing -Method Post -Uri $slackUrl -Body $slackBody
             }
             Catch {
                 Write-Host -fore red "Slack message post failure $slackUrl"
@@ -683,7 +840,6 @@ Function Run-Miner {
                     try {
                         $process = Start-Process -FilePath PowerShell.exe -PassThru -Verb Runas -WorkingDirectory $pwd -ArgumentList $argList
                         exit $process.ExitCode
-                        log-Write -logstring 'Restarting as Administrator' -fire Red -notification 1
                     }
                     catch {
                         log-Write -logstring 'Failed to elevate to administrator' -fore Red -notification 0
@@ -747,8 +903,8 @@ Function Run-Miner {
                 Write-Verbose -Message "Waiting for [$( $ComputerName )] to become connectable ..."
                 ## If the timer has waited greater than or equal to the timeout, throw an exception exiting the loop
                 if ($timer.Elapsed.TotalSeconds -ge $NetworkTimeout) {
-                    log-write -logstring "Connection down exceeded $NetworkTimeout" -fore red -notification 1
-                    throw "Timeout exceeded. Giving up on ping availability to [$ComputerName]"
+                    log-write -logstring "Connection down exceeded $NetworkTimeout, Restarting script" -fore red -notification 1
+                    call-Self
                 }
                 ## Stop the loop every $CheckEvery seconds
                 if (-not($NetStatus)) {
@@ -783,11 +939,11 @@ Function Run-Miner {
             if ($CardResetEnabled -eq 'True') {
                 foreach ($dev in $d) {
                     $vCTR = $vCTR + 1
-                    log-Write -logstring "Disabling $dev" -fore Red -notification 4
+                    log-Write -logstring "Disabling $dev" -fore Red -notification 5
                     $disableTimer = [Diagnostics.Stopwatch]::StartNew()
                     $null = Disable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     $disableTimer.Stop()
-                    log-Write -logstring "Disabled $vCTR`t $dev`t time taken $($disableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 4
+                    log-Write -logstring "Disabled $vCTR`t $dev`t time taken $($disableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 5
                     if ($($disableTimer.Elapsed.TotalSeconds) -gt $maxDeviceResetTime)
                     {
                         log-Write -logstring "Device took longer than maxDeviceResetTime to disable" -fore red -notification 0
@@ -795,17 +951,17 @@ Function Run-Miner {
                     }
                     Start-Sleep -Seconds $devwait
 
-                    log-Write -logstring "Enabling $dev" -fore Blue -notification 4
+                    log-Write -logstring "Enabling $dev" -fore Blue -notification 5
                     $enableTimer = [Diagnostics.Stopwatch]::StartNew()
                     $null = Enable-PnpDevice -DeviceId $dev.DeviceID -ErrorAction Ignore -Confirm:$false
                     $enableTimer.Stop()
-                    log-Write -logstring "Enabled $vCTR`t $dev`t time taken $($enableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 4
+                    log-Write -logstring "Enabled $vCTR`t $dev`t time taken $($enableTimer.Elapsed.TotalSeconds)" -fore yellow -notification 5
                     Start-Sleep -Seconds $devwait
                 }
                 log-Write -logstring "$vCTR Video Card(s) Reset" -fore yellow -notification 1
             }
             else {
-                log-Write -logstring 'Card reset bypassed' -fore red -notification 1
+                log-Write -logstring 'Card reset bypassed' -fore red -notification 0
             }
         }
 
@@ -868,7 +1024,6 @@ Function Run-Miner {
                 $KeyInfo = $Host.UI.RawUI.ReadKey('NoEcho, IncludeKeyDown')
             }
 
-            Write-Host
         }
 
         Function refreshSTAK {
@@ -967,18 +1122,19 @@ Function Run-Miner {
             )
             foreach ($item in $app) {
                 $prog = ($item -split '\s', 2)
-                if (Test-Path -Path $prog[0]) {
-                    log-Write -logstring "Starting $item" -fore green -notification 1
+                $e = $ScriptDir + "\" + $prog[0]
+                if (Test-Path -Path $e ) {
+                    log-Write -logstring "Starting $item" -fore green -notification 2
                     If ($prog[1]) {
-                        $null = Start-Process -FilePath $prog[0] -ArgumentList $prog[1]
+                        $null = Start-Process -FilePath $e -ArgumentList $prog[1]
                     }
                     Else {
-                        $null = Start-Process -FilePath $prog[0]
+                        $null = Start-Process -FilePath $e
                     }
                     Start-Sleep -Seconds 1
                 }
                 Else {
-                    Write-Host -fore Red "$prog[0] NOT found. This is not fatal. Continuing..."
+                    Write-Host -fore Red "$e NOT found. This is not fatal. Continuing..."
                 }
             }
         }
@@ -989,7 +1145,7 @@ Function Run-Miner {
 
             $STAK = "$ScriptDir\$script:STAKfolder\$script:STAKexe"
             If (Test-Path ($STAK)) {
-                log-Write -logstring 'Starting STAK' -fore Yellow -notification 1
+                log-Write -logstring 'Starting STAK' -fore Yellow -notification 2
                 If ($STAKcmdline) {
                     Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder"
                     Start-Process -FilePath $STAK -ArgumentList $STAKcmdline -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
@@ -1230,11 +1386,11 @@ Function Run-Miner {
         }
 
         Function test-cards {
-            [int]$boardCount,$null = (clinfo.exe -ErrorAction SilentlyContinue | sls  "Board Name"|sls -n "n/a" ).count
+            [int]$boardCount,$null = ($clinfo | Select-String  "Board Name"|Select-String -n "n/a" ).count
             if ($boardCount -ge 1) {
                 [int]$boardActual = $boardCount -1
                 log-write -logstring "Device count $boardActual" -fore red -notification 1
-                $deviceinfodebug = (clinfo.exe | sls  "Board Name") -replace 'Board Name:'
+                $deviceinfodebug = ($clinfo | Select-String  "Board Name") -replace 'Board Name:'
                 if ($deviceinfodebug){
                     log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red
                 }
@@ -1318,12 +1474,14 @@ Function Run-Miner {
                         write-xmrstak-Pools-File
                         write-host "Starting mining using the following pools.txt"
                         get-content -path "$STAKfolder\$poolsdottext"
+                        log-write -logstring "Continuing in $sleeptime seconds" -fore yellow -notification 4
+                        start-sleep -s $sleeptime
                     } else {
                         log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
                         log-write -logstring "Error messages `n $($Error[0].InvocationInfo.line )"
                     }
                 }
-EXIT
+
                 kill-Process -STAKexe ($STAKexe)
                 if ($ResetCardOnStartup -eq 'True') {
                     reset-VideoCard -force $true
@@ -1536,7 +1694,6 @@ EXIT
                 $minhashrate = $script:rTarget
             }
             clear-host
-            log-Write -logstring "Check our current hashrate against low target every $sleeptime seconds" -fore Yellow -notification 5
             log-Write -logstring 'Hash monitoring has begun.' -fore Green -notification 3
             $timer = 0
             $runTime = 0
@@ -1695,7 +1852,7 @@ EXIT
                         try {
                             nanopoolvars
                             if ($script:provider -ne 'nanopool') {
-                                log-write -logstring "Not using Nanopool, you are using $script:provider" -fore red -notification 1
+                                log-write -logstring "Not using Nanopool, you are using $script:provider, disabling stats" -fore red -notification 1
                                 $script:enableNanopool = 'False'
                             }
                             else {
@@ -1728,86 +1885,75 @@ EXIT
         Function show-Coin-Info {
             $t = $host.ui.RawUI.ForegroundColor
             $host.ui.RawUI.ForegroundColor = "Green"
-
-            $coininfoortig = "
-      Pool Balance                  $script:balance
-      Hashrate at pool 1hr          $script:avghash1hr
-      Price in BTC                  $script:btcprice
-
-      Stat Time Range               $coinStats
-      $( $script:coin )             $script:coins
-      BTC                           $( $script:coins * $script:btcprice )
-      Dollars                       $script:dollars
-
-            "
-
             $coininfo = New-Object PSObject
-
             $coininfo  | Add-Member -NotePropertyName 'Balance' -NotePropertyValue $script:balance
             $coininfo  | Add-Member -NotePropertyName 'H/R' -NotePropertyValue $script:avghash1hr
             $coininfo  | Add-Member -NotePropertyName 'BTC' -NotePropertyValue   $script:btcprice
             $coininfo  | Add-Member -NotePropertyName $( $script:coin ) -NotePropertyValue  $script:coins
             $coininfo  | Add-Member -NotePropertyName "BTC per $coinStats" -NotePropertyValue $( $script:coins * $script:btcprice )
             $coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue $script:dollars
-
             $coininfo | Format-Table
             $host.ui.RawUI.ForegroundColor = $t
         }
 
-
-
         Function check-Influx {
-            if ($grafanaEnabled -eq 'True') {
+            if ( $grafanaEnabled -eq 'True' ) {
                 $error.clear()
                 Import-Module "Influx" -ErrorAction SilentlyContinue
-                if ($error) {
+                if ( $error ) {
+                    $error.Clear()
                     Clear-Host
                     Write-Host "`n`n`n`n`n`n`n`n`n`n"
-                    log-Write -logstring "You need Influx modules to write to Grafana" -fore Red -Linefeed -notification 1
-                    log-Write -logstring "https://github.com/markwragg/PowerShell-Influx" -Fore Yellow -Linefeed -notification 1
+                    log-Write -logstring "You need Influx modules to write to Grafana, " -fore Red -Linefeed -notification 1
+                    log-Write -logstring "https://github.com/markwragg/PowerShell-Influx" -Fore Yellow -Linefeed -notification 2
+                    $a = new-object -comobject wscript.shell
+                    $intAnswer = $a.popup( "Do you want to install these now ?", 10,
+                                           "Install modules from https://github.com/markwragg/PowerShell-Influx",
+                                           4+32 )
+                    If ( $intAnswer -eq 6 ) {
+                        log-write -logstring "Installing https://github.com/markwragg/PowerShell-Influx" -fore yellow -notification 1
+                        Install-Module Influx -Scope CurrentUser -ErrorAction Inquire
+                    }
+                }
+
+                $error.Clear()
+                Import-Module "Influx" -ErrorAction SilentlyContinue
+                if ( $error ) {
                     $grafanaEnabled = 'False'
                     log-Write -logstring "Disabling Grafana for now" -fore Green  -Linefeed -notification 1
-
-                    for ([int]$I = 10; $I -ge 0; $I--)
-                    {
-                        Write-Progress  -Activity "Displaying message" -Status "Seconds remaining" -SecondsRemaining $I -Id 1
-                        Start-Sleep -s 1
-                    }
-                    Write-Progress -Activity 'Continuing' -Completed -Id 1
                 }
             }
         }
 
-        Function nanopoolvars
-        {
-            IF (Test-Path -Path ("$STAKfolder\\pools.txt")) {
+        Function nanopoolvars {
+            IF ( Test-Path -Path ("$STAKfolder\\pools.txt" ) ) {
                 Write-Verbose  'reading pools.txt'
 
-                $pool=(($script:ConnectedPool)  -Split ':')[0]
-
-
-                $rawPoolData = Get-Content -Path ("$STAKfolder\\pools.txt") |
-                               Where-Object { ($_.Contains($pool))  } |
+                $pool = (($script:ConnectedPool ) -Split ':' )[ 0 ]
+                $rawPoolData = Get-Content -Path ("$STAKfolder\\pools.txt" ) |
+                               Where-Object { ($_.Contains( $pool ) ) } |
                                Out-String
-                $rawWalletData = Get-Content -Path ("$STAKfolder\\pools.txt") |
-                                 Where-Object { ($_.Contains('wallet_address'))  } |
+
+                $rawWalletData = Get-Content -Path ("$STAKfolder\\pools.txt" ) |
+                                 Where-Object { ($_.Contains( 'wallet_address' ) ) } |
                                  Out-String
 
-                if ($rawPoolData) {
+                if ( $rawPoolData ) {
                     $pooldata = $rawPoolData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
                                 ConvertFrom-StringData
                     $walletdata = $rawWalletData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
-                                ConvertFrom-StringData
+                                  ConvertFrom-StringData
 
                     $wallet = $walletdata.'wallet_address'
 
                     try {
-                            if ( $wallet -match '/' ) {
+                        if ( $wallet -match '/' ) {
                             $miner, $null = $wallet.split( '/' )
                         }
                         if ( $miner -match '.' ) {
                             $script:adr, $script:worker = $miner.split( '.' )
-                        } else {
+                        }
+                        else {
                             $script:adr = $miner
                         }
                         $coinzone, $script:provider, $null = $pool.split( '.' )
@@ -1817,13 +1963,12 @@ EXIT
                         log-write -logstring "Error reading pools file, disabling nanopool" -fore red -notification 1
                         $script:enableNanopool = 'False'
                     }
-                } else {
+                }
+                else {
                     log-Write -logstring "Connected pool not found in pools.txt" -fore red -notification 2
                 }
             }
         }
-
-
 
         function read-Pools-File {
             if ( test-path -path $poolsfile ) {
@@ -1892,7 +2037,7 @@ EXIT
 
                 log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
                 log-write -logstring "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow -notification 2
-                log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 2
+                log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 3
                 $bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
                 $ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
                 $profitLoss = $bestcoin - $ourcoin
@@ -1912,104 +2057,108 @@ EXIT
             $settings = @{ }
             $rawobj = $script:PoolsList.($script:coinToMine )
             $rawobj.psobject.properties | ForEach-Object { $poolfile[ $_.Name ] = $_.Value }
-            $rawobj.settings.psobject.properties | ForEach-Object { $settings[ $_.Name ] = $_.Value }
+            if ($rawobj.settings) {
+                $rawobj.settings.psobject.properties | ForEach-Object { $settings[ $_.Name ] = $_.Value }
 
-            log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2 -linefeed
-            if ( $settings.hdiff ) {
-                $script:hdiff = ($settings ).hdiff
-            }
-
-            if ( $settings.tools ) {
-                $script:vidToolArray = $settings.tools
-            }
-
-            if ( $settings.minhashrate ) {
-                $script:minhashrate = ($settings ).minhashrate
-            }
-
-            $out = "Settings found"
-            $out += "`n hdiff = $script:hdiff"
-            foreach ( $item in $script:vidToolArray ) {
-                $out += "`n $item"
-            }
-            $out += "`n minhashrate = $script:minhashrate"
-            $out += "`n $($script:amd)"
-            $out += "`n $($script:nvidia)"
-            $out += "`n $($script:cpu)"
-            log-write -logstring $out -fore white -notification 3 -linefeed
-
-            if ( $settings.amd ) {
-                $script:amd = ($settings ).amd
-                if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:amd" ) {
-                    try {
-                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
-                        copy-item ("$ScriptDir\$script:STAKfolder\$script:amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" )
-                    }
-                    catch {
-                        log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
-                    }
+                log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2 -linefeed
+                if ( $settings.hdiff ) {
+                    $script:hdiff = ($settings ).hdiff
                 }
-                else {
-                    log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:amd" ) loading defaults "-fore Red -notification 3 -linefeed
 
-                    if ( test-path -path "$ScriptDir\$script:STAKfolder\default_amd" ) {
-                        $null = (copy-item ("$ScriptDir\$script:STAKfolder\default_amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" ) -force )
-                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\default_amd.txt" )" -fore white -notifucation 3
+                if ( $settings.tools ) {
+                    $script:vidToolArray = $settings.tools
+                }
+
+                if ( $settings.minhashrate ) {
+                    $script:minhashrate = ($settings ).minhashrate
+                }
+
+                $out = "Settings found"
+                $out += "`n hdiff = $script:hdiff"
+                foreach ( $item in $script:vidToolArray ) {
+                    $out += "`n $item"
+                }
+                $out += "`n minhashrate = $script:minhashrate"
+                $out += "`n $( $script:amd )"
+                $out += "`n $( $script:nvidia )"
+                $out += "`n $( $script:cpu )"
+                log-write -logstring $out -fore white -notification 3 -linefeed
+
+                if ( $settings.amd ) {
+                    $defaultamd = 'default_amd.txt'
+                    $script:amd = ($settings ).amd
+                    if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:amd" ) {
+                        try {
+                            
+                            copy-item ("$ScriptDir\$script:STAKfolder\$script:amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" )
+
+                        }
+                        catch {
+                            log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
+                        }
                     }
                     else {
-                        log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\default_amd" ) you need this file to fall back too, can be empty"  -fore red -notification 3
-                        Pause-Then-Exit
+                        log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:amd" ) loading defaults "-fore Red -notification 3 -linefeed
+
+                        if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultamd" ) {
+                            $null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultamd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" ) -force )
+                            log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultamd" )" -fore white -notification 3
+                        }
+                        else {
+                            log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultamd" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+                            Pause-Then-Exit
+                        }
                     }
                 }
-            }
 
-            if ( $settings.nvidia ) {
-                $script:nvidia = ($settings ).nvidia
-                if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:nvidia" ) {
-                    try {
-                        copy-item ("$ScriptDir\$script:STAKfolder\$script:nvidia" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" )
-                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore white -notification 3
+                if ( $settings.nvidia ) {
+                    $defaultnv='default_nvidia.txt'
+                    $script:nvidia = ($settings ).nvidia
+                    if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:nvidia" ) {
+                        try {
+                            copy-item ("$ScriptDir\$script:STAKfolder\$script:nvidia" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" )
+                            log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore white -notification 3
 
-                    }
-                    catch {
-                        log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore red -notification 3
-                    }
-                }
-                else {
-                    log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:nvidia" ) loading defaults "-fore Red -notification 3 -linefeed
-                    if ( test-path -path "$ScriptDir\$script:STAKfolder\default_nvidia.txt" ) {
-                        $null = (copy-item ("$ScriptDir\$script:STAKfolder\default_nvidia.txt" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" ) -force )
-                        log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\default_nvidia.txt" )" -fore white -notification 3
+                        }
+                        catch {
+                            log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore red -notification 3
+                        }
                     }
                     else {
-                        log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\default_nvidia.txt" ) you need this file to fall back too, can be empty"  -fore red -notification 3
-                        Pause-Then-Exit
+                        log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:nvidia" ) loading defaults "-fore Red -notification 3 -linefeed
+                        if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultnv" ) {
+                            $null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultnv" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" ) -force )
+                            log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultnv" )" -fore white -notification 3
+                        }
+                        else {
+                            log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultnv" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+                            Pause-Then-Exit
+                        }
                     }
                 }
-            }
 
-
-
-            if ( $settings.cpu ) {
-                $script:cpu = ($settings ).cpu
-                if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:cpu" ) {
-                    try {
-                         $null = (copy-item ("$ScriptDir\$script:STAKfolder\$script:cpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) )
-                         log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore white -notification 3
-                    }
-                    catch {
-                        log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore red -notification 3
-                    }
-                }
-                else {
-                    log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:cpu" ) loading defaults  " -fore Red -notification 3 -linefeed
-                    if ( test-path -path "$ScriptDir\$script:STAKfolder\default_cpu.txt" ) {
-                        $null = (copy-item ("$ScriptDir\$script:STAKfolder\default_cpu.txt" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) -force )
-                        log-write -logstring "Copying  $("$ScriptDir\$script:STAKfolder")\default_cpu.txt " -fore white -notification 3
+                if ( $settings.cpu ) {
+                    $defaultcpu = 'default_cpu.txt'
+                    $script:cpu = ($settings ).cpu
+                    if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:cpu" ) {
+                        try {
+                            $null = (copy-item ("$ScriptDir\$script:STAKfolder\$script:cpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) )
+                            log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore white -notification 3
+                        }
+                        catch {
+                            log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore red -notification 3
+                        }
                     }
                     else {
-                        log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\default_cpu.txt" ) you need this file to fall back too, can be empty"  -fore red -notification 3
-                        Pause-Then-Exit
+                        log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:cpu" ) loading defaults  " -fore Red -notification 3 -linefeed
+                        if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultcpu" ) {
+                            $null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultcpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) -force )
+                            log-write -logstring "Copying  $( "$ScriptDir\$script:STAKfolder" )\$defaultcpu " -fore white -notification 3
+                        }
+                        else {
+                            log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultcpu" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+                            Pause-Then-Exit
+                        }
                     }
                 }
             }
@@ -2017,18 +2166,31 @@ EXIT
 
         function write-xmrstak-Pools-File {
 
-            $script:poolsdottextContent = '"pool_list" : ['+"`n"
+            
+                                          function Select-Address
+                                          {
+                                            param
+                                            (
+                                              [Parameter(Mandatory=$true, ValueFromPipeline=$true, HelpMessage="Data to process")]
+                                              $InputObject
+                                            )
+                                            process
+                                            {
+                                               $pool[$InputObject.Name] = $InputObject.Value 
+                                            }
+                                          }
+
+          $script:poolsdottextContent = '"pool_list" : ['+"`n"
 
             $poolfile = @{}
             $pool = @{}
             $rawobj=$script:PoolsList.($script:coinToMine)
             $rawobj.psobject.properties | ForEach-Object { $poolfile[$_.Name] = $_.Value }
-            $rawobj.address.psobject.properties | ForEach-Object { $pool[$_.Name] = $_.Value }
+            $rawobj.address.psobject.properties | Select-Address
 
             $footer = '],
             "currency" : "'+$($poolfile.algorithm)+'",
             '
-
             function write-entry {
                 Param (
                     [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][string]$key,

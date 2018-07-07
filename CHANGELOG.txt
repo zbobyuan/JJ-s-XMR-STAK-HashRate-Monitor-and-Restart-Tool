@@ -1,3 +1,19 @@
+Version 4.3.5
+Release Date 2018-07-07
+
+Changes
+    Profit switching functionality extention as it now supports per coin
+        amd.txt, nvida.txt, cpu.txt , this allows you to mine a coin and figure out best parameters such as intensity
+        minhashrate, Not all coins mine the same rate
+        hdiff, hashdrop setting
+        nanoipoolapi moved into main script so only a single executable is needed
+        if grafana is enabled and influx database modules are not installed script will prompt for instalation permision
+
+Note
+    If you enable profit switching you MUST create default_amd.txt, default_nvida.txt and default_cpu.txt config files
+        These will be used if you do not specify anything in the pool config.
+
+
 Version 4.3.4
 Release Date 2018-07-04
 
@@ -6,11 +22,11 @@ Changes:
     of miner, Uses 1Hr stats, stats are saved in the folder as profit.json if you want to review these are also in your
     logfiles
     Added dead thread check for when xmr-stak is returning null data due to dead thread, triggers card restart and test
-    Added generate_pool.json.ps1 This creates an example pools.json file for profit switching
+    Added generate_pool_json.ps1 This creates an example pools.json file for profit switching
 
 
 Notes
-    generate_pool.json.ps1, right mouse click and choose run with powershell
+    generate_pool_json.ps1, right mouse click and choose run with powershell
     This generates an example pools.json using my own pools,  whilst I would be grateful for some hashes this is here
     to create an example pools.json file for you to edit you are welcome to use them for testing
 
@@ -18,7 +34,7 @@ Notes
     however you must ensure you comment out entire sections
 
     pools.json = can have items commented out using / or #  sections start { and end with }, these are verticaly aligned
-    generate_pool.json.ps1 = standard powershell commenting
+    generate_pool_json.ps1 = standard powershell commenting
 
     if you get a failure to read file message you have made a mistake, if its a bug please report via slack channel
 

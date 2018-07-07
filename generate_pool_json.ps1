@@ -16,7 +16,7 @@ function dev-test {
 			settings = @{
 				hdiff = 500
 				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR','OverdriveNTool.exe -consoleonly -r1 -p1XMR')
-				minhashrate = 4000
+				minhashrate = 2200
 			}
 		}
 		etn = @{

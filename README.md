@@ -1,11 +1,11 @@
-Come say hi 
+Written to keep your miner hashing and taking care of card issues before they become an issue. You can use this in mixed AMD and Nvidia rigs however card resets are restricted to AMD devices, if you have an Nvidia card  that exhibits hashdrop that is fixed by reseting the card please provide details for it to become supported.
 
-https://join.slack.com/t/hashmonitor/shared_invite/enQtMzcxNDgyMjQ1NzUxLWY2NTA2NDdmNDBhM2QyNzIyNzgyYjNjMjFjYzA3NDZiNDFmYjVjYjEwMWZjNWZiYWUyZDM5OWVkNDY5MmJmMzM
+Slack Group for support, Idea's and a place to view your miners logs in realtime should you wish to join in 
+https://join.slack.com/t/hashmonitor/shared_invite/enQtMzkzODgzOTM4MTc2LTM4YjE1MDdiZGYxMGUzNDQ4M2IyYTZmZmE4MDA5YjEyZDA3Nzk2MjI3ZGYwNzA4ZTg3OTA1NTg5MzMyNTEzMDQ
 
-Please see changelog for a detailed enhancement list, Latest features are 
+Script now incorporates profit switching using predetermined pools set by you,  **Please see ProfitReadme.md for further info**
 
-    Profit switching using predetermined pools
-    Nanopool stats for runtime pool stats
+Nanopool api (All Coins) , Pol, side ststs displayed toi screen and grafana if configured
     
 I initally modified this script for myself after having issues with the amount of dev-mining in other versions due to frequent hash-drops whilst getting my Vega config spot on 
 
@@ -18,7 +18,7 @@ Please feel free to provide feedback and enhancement Idea's as your contribution
 For additonal cards to be supported by default please provide me the friendly names found by running the following powershell command on the destination system
     Get-PnpDevice -Class Display 
 
-By default this script sends basic logging info into the Hashmonitor Slack channel, to disable this simply comment out the SlackURL in the hashmonitor.ini file, If you wish to view your logs in the hashmonitor channel please send me a request on Slack to join with your miners hostname and I will add you into our channel    
+By default this script sends basic logging info into the Hashmonitor Slack channel, to disable this simply comment out the SlackURL in the hashmonitor.ini file, If you wish to view your logs in the hashmonitor channel please send me a request via Slack to join with your miners hostname and I will add you into our channel    
 
 Example Grafana dashboard screenshot included in repository
 
@@ -38,7 +38,7 @@ Example Grafana dashboard screenshot included in repository
         
    
 There is no dev fee mining included in this software, 
-If you find this software usefull please donate what you can spare to the above addresses.
+If you find this software useful please donate what you can spare to the above addresses.
     
     I strongly advise you to follow the setup guides available on vegamining.blogspot.com to create a stable platform for this software to operate on.
     
@@ -60,7 +60,8 @@ If you find this software usefull please donate what you can spare to the above 
     AMD Vega 56 & 64
     AMD Vega Frontier Edition
     AMD 580 series    
-    
+    AMD 570 series    
+        
 ![Screenshot](grafana_demo.png)
 
      

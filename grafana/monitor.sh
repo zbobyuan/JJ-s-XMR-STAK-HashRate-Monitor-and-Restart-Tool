@@ -1,4 +1,5 @@
-id=`docker run -d \
+#!/usr/bin/env bash
+docker run -d \
   --name docker-influxdb-grafana \
   -p 3003:3003 \
   -p 3004:8083 \
@@ -13,5 +14,4 @@ id=`docker run -d \
   --health-interval=5s \
   --health-timeout=2s \
   --health-cmd="curl -sf http://127.0.0.1:3003 >/dev/nul || exit 1" \
-  monitor:latest `
-
+  monitor:latest
