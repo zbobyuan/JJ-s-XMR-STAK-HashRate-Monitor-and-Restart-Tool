@@ -15,7 +15,7 @@ function dev-test {
 			algorithm = 'monero7'
 			settings = @{
 				hdiff = 500
-				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR','OverdriveNTool.exe -consoleonly -r1 -p1XMR')
+				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR')
 				minhashrate = 2200
 			}
 		}
@@ -32,7 +32,7 @@ function dev-test {
 			algorithm = 'monero7'
 			settings = @{
 				hdiff = 500
-				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR','OverdriveNTool.exe -consoleonly -r1 -p1XMR')
+				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR')
 				minhashrate = 4000
 			}
 		}
@@ -53,7 +53,7 @@ function dev-test {
 			address = @{
 				"pool.masaricoin.com:5555" = 1
 			}
-			wallet_address = "5t5mEm254JNJ9HqRjY9vCiTE8aZALHX3v8TqhyQ3TTF9VHKZQXkRYjPDweT9kK4rJw7dDLtZXGjav2z9y24vXCdRc4mgijA99QZ94AZzaz"
+			wallet_address = "5t5mEm254JNJ9HqRjY9vCiTE8aZALHX3v8TqhyQ3TTF9VHKZQXkRYjPDweT9kK4rJw7dDLtZXGjav2z9y24vXCdRc4mgijA99QZ94AZzaz+100000"
 			rig_id = "$($env:COMPUTERNAME)"
 			pool_password = "pass@heynes.biz"
 			use_nicehash = $false
@@ -62,7 +62,6 @@ function dev-test {
 			algorithm = 'cryptonight_masari'
 			settings = @{
 				hdiff = 600
-				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR', 'OverdriveNTool.exe -consoleonly -r1 -p1XMR')
 				minhashrate = 4000
 				amd = 'msr_amd.txt'
 				nvidia = 'msr_nvidia.txt'

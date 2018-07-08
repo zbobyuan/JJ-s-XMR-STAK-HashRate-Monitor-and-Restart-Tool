@@ -2,11 +2,12 @@
 Clear-Host
 $startattempt = 0
 
+
 Function Run-Miner {
 	do {
-		$ver = '4.3.5'
+		$ver = '4.3.7'
 		$debug = $false
-
+		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
 		$Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool, Reworked  by Mutl3y v$ver"
 		$Host.UI.RawUI.BackgroundColor = 'Black'
@@ -40,19 +41,11 @@ Function Run-Miner {
 		$script:PoolsList = @{ }
 		$script:pools = [ Ordered ]@{ }
 		$script:lastRoomTemp = @{ }
+		$script:timeDrift = $null
+		$script:validSensorTime = $null
 		$proftStatRefreshTime = 60
 		$poolsdottext = "pools.txt"
 		$poolsfile = 'pools.json'
-
-		# Add support for room temp sensor csv, time and reading format with headers
-		# Time  Reading
-		if ( test-path -path "$PSScriptRoot\TEMPerX1.csv" ) { $sensorDataFile = "$PSScriptRoot\TEMPerX1.csv" }
-		elseif (test-path -path "$PSScriptRoot\sensor-data\TEMPerX1.csv") { $sensorDataFile = "$PSScriptRoot\sensor-data\TEMPerX1.csv" }
-		else { $sensorDataFile = "./sensor-data\TEMPerX1.csv" }
-
-
-		$script:lastRoomTemp = $null
-
 
 
 		$stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
@@ -221,7 +214,19 @@ Function Run-Miner {
         # Enable profit switching, Please read the ProfitReadme.md before enabling this
         profitSwitching  = False
 
+		# Max room Temp, if you use a TEMPer usb temp sensor, This is when we stop mining
+		TEMPerMaxTemp = 30
 
+		# Temp has to drop under max by this much before we start mining again
+		TEMPerMinDiff = 0.2
+
+		# TEMPer Valid Reading Time, Reading has to be within this time period to be concidered valid in case
+		# sensor stops responding, Set to huge amount if you do not wish to stop mining on app stop but be careful
+		TEMPerValidMinutes = 2
+
+		# If its too hot do i kill STAK, Failure to do this during a restart and it will loop waiting fo the temp
+		to come down without stopping stak
+		killStakOnMaxTemp = False
       "
 
 		#########################################################################
@@ -595,6 +600,32 @@ Function Run-Miner {
 			$profitSwitching = 'False'
 		}
 
+		# Check if profitSwitching is enabled
+		if ( $inifilevalues.TEMPerMaxTemp ) {
+			[ Decimal ]$TEMPerMaxTemp = $inifilevalues.TEMPerMaxTemp
+		}
+
+		# Check if profitSwitching is enabled
+		if ( $inifilevalues.TEMPerMinDiff ) {
+			[ Decimal ]$TEMPerMinDiff = $inifilevalues.TEMPerMinDiff
+		}
+
+		# Check if profitSwitching is enabled
+		if ( $inifilevalues.TEMPerValidMinutes ) {
+			[ int ]$TEMPerValidMinutes = $inifilevalues.TEMPerValidMinutes
+		}
+
+		# Check if profitSwitching is enabled
+		if ( $inifilevalues.sensorDataFile ) {
+			$sensorDataFile = ($inifilevalues.sensorDataFile) -replace '//','/'
+
+		}
+
+		# Check if killStakOnMaxTemp is enabled
+		if ( $inifilevalues.killStakOnMaxTemp ) {
+			[ string ]$killStakOnMaxTemp = $inifilevalues.killStakOnMaxTemp
+		} else {$killStakOnMaxTemp = 'False'}
+
 		$logfile = ("$logdir\$log" + "_$( get-date -Format yyyy-MM-dd ).log" ) # Log what we do by the day
 
 
@@ -622,6 +653,16 @@ Function Run-Miner {
 			#            $currencyalue=$rawcurrency.currency
 		}
 
+		# Add support for room temp sensor csv, time and reading format with headers
+		# Time  Reading
+		if ( test-path -path "$PSScriptRoot\TEMPerX1.csv" ) {
+			$sensorDataFile = "$PSScriptRoot\TEMPerX1.csv"
+		} ElseIf (
+		test-path -path "$PSScriptRoot\sensor-data\TEMPerX1.csv") {
+			$sensorDataFile = "$PSScriptRoot\sensor-data\TEMPerX1.csv"
+		} ElseIf (Test-Path -Path ".\sensor-data\TEMPerX1.csv") {
+			$sensorDataFile = ".\sensor-data\TEMPerX1.csv"
+		}
 
 		#clinfo.exe -ErrorAction SilentlyContinue = "$ScriptDir\clinfo.exe -ErrorAction SilentlyContinue"
 
@@ -940,6 +981,58 @@ Function Run-Miner {
 			Start-Sleep -Seconds 1
 		}
 
+		function check-room-temps {
+			$CheckEvery = 10
+			$validTime = $null
+			log-write -logstring "Checking Max Room Temp" -fore yellow -notification 2
+			get-room-temps
+			if ( $TEMPerValidMinutes -gt $script:timeDrift ) {
+				write-verbose "Valid Time found $( $script:lastRoomTemp.Time )"
+				$validTime = 'True'
+			}
+			else {
+				write-verbose "Invalid Reading, Too much time drift $script:timeDrift minutes"
+				$validTime = 'False'
+			}
+
+			$lt = ($script:lastRoomTemp.OuterTemp )
+			$lti = ($script:lastRoomTemp.Time )
+			if ( $lt -gt $TEMPerMaxTemp ) {
+				log-write -logstring "Its a bit hot $lt c, max temp is set at $TEMPerMaxTemp c taken $lti" -fore yellow -notification 1
+			} else {
+				log-write -logstring "Room temp ok $lt c" -fore yellow -notification 1
+			}
+
+			$timer = [ Diagnostics.Stopwatch ]::StartNew()
+			if ( $script:validSensorTime -eq 'True' ) {
+				while ( ($script:lastRoomTemp.OuterTemp ) -gt $TEMPerMaxTemp ) {
+					Write-Host "Too Hot, Waiting for temp drop, Current $lt, Max $TEMPerMaxTemp "
+					write-host "Time before last reading timeouts and script continues $($TEMPerValidMinutes -$script:timeDrift) Minutes"
+					debug-Check
+					write-host "Sleeping for $CheckEvery Seconds"
+					start-sleep -s $CheckEvery
+					get-room-temps
+					if ($killStakOnMaxTemp -eq 'True'){
+						kill-Process -STAKexe ($STAKexe )
+					}
+					if ($script:STAKisup) {
+						log-write -logstring "Room temp not ok $lt c but stop STAK disabled so exiting wait loop to allow script to monitor hashrate" -fore red -notification 1
+						break
+					}
+				}
+			}
+
+			## When finished, stop the timer
+			$timer.Stop()
+			if ( $timer.Elapsed.TotalSeconds -gt 3 ) {
+				log-write -logstring "Time in cool down loop $( $timer.Elapsed.TotalMinutes ) minutes" -fore Yellow -notification 1
+			}
+			write-verbose "Exiting Temp Check Loop"
+
+		}
+
+
+
 		function reset-VideoCard {
 			##### Reset Video Card(s) #####
 
@@ -1113,22 +1206,57 @@ Function Run-Miner {
 
 		}
 
-		function get-room-temps {
+		function debug-Check {
+			param ([ switch ]$on
+			)
+			$preferenceHolder = $VerbosePreference
 
-			if ( $sensorDataFile ) {
-				$script:lastRoomTemp = (get-content -path $sensorDataFile ) -replace ('â|„|ƒ' ) |
-				                       ConvertFrom-Csv  | select-object -last 1
-				$script:timeDrift = [ int ](new-timespan -Start ([ DateTime ]$script:lastRoomTemp.Time ) -End (Get-Date ) ).TotalSeconds
+			if ( $on ) {
+				$script:VerbosePreference = 'Continue'
+			}
+			else {
+				$VerbosePreference = $script:VerbosePreferenceDefault
 			}
 		}
 
+		function get-room-temps {
+			<#
+				Updates
+					$script:lastRoomTemp.OuterTemp      Last temp
+					$script:lastRoomTemp.Time           Last time temp was taken
+					$script:timeDrift                   Number of minutes since reading
+			#>
+      if ( $sensorDataFile ) {
+        write-verbose "get-room-temps: Sensorfile defined $sensorDataFile"
+        if ( test-path -path $sensorDataFile ) {
+          write-verbose "get-room-temps: Sensorfile exists $sensorDataFile"
+          $script:lastRoomTemp = (get-content -path $sensorDataFile ) -replace ('â|„|ƒ' ) | out-string |
+                                 ConvertFrom-Csv | Select-Object -Last 1
+          write-verbose "get-room-temps: Last Time $( $script:lastRoomTemp.Time )"
+          write-verbose "get-room-temps: Last Temp $( $script:lastRoomTemp.OuterTemp )"
+
+          $script:timeDrift = [ int ](new-timespan -Start ([ DateTime ]$script:lastRoomTemp.Time ) -End (Get-Date ) ).TotalMinutes
+
+          if ( $TEMPerValidMinutes -gt $script:timeDrift ) {
+            write-verbose "Valid Time found $( $script:lastRoomTemp.Time )"
+            $script:validSensorTime = 'True'
+          }
+          else {
+            write-verbose "Invalid Reading, Too much time drift $script:timeDrift "
+            $script:validSensorTime = 'False'
+            write-verbose "get-room-temps: Time Drift in minutes $script:timeDrift"
+          }
+
+        }
+      }
+    }
 
 
-		##################################
-		Function refresh-Screen {
-			$tmRunTime = get-RunTime -sec ($runTime )
-			$tpUpTime = get-RunTime -sec ($script:UpTime )
-			$displayOutput = "
+			##################################
+			Function refresh-Screen {
+				$tmRunTime = get-RunTime -sec ($runTime )
+				$tpUpTime = get-RunTime -sec ($script:UpTime )
+				$displayOutput = "
           ===========================================================
           Starting Hash Rate:           $script:maxhash H/s
           Restart Hash Rate:            $script:rTarget H/s
@@ -1144,1211 +1272,1212 @@ Function Run-Miner {
           Good Share Percent:           $script:sharepercent
           Share Time:                   $script:TimeShares
         ===========================================================
+
 "
 
-			Clear-Host
+				Clear-Host
 
-			if ( $script:lastRoomTemp ) {
-				$displayOutput += $script:lastRoomTemp | Out-String
+				if ( $script:lastRoomTemp ) {
+					$displayOutput +="Last Temp Taken"
+					$displayOutput += $script:lastRoomTemp | Out-String
+				}
+
+				Write-Host -fore Green $displayOutput
+				if ( $script:coins ) {
+					show-Coin-Info
+				}
+
 			}
 
-			Write-Host -fore Green $displayOutput
-			if ( $script:coins ) {
-				show-Coin-Info
-			}
-
-		}
-
-		Function Run-Tools {
-			param ([ Parameter ( Mandatory ) ]
-			       $app
-			)
-			foreach ( $item in $app ) {
-				$prog = ($item -split '\s', 2 )
-				$e = $ScriptDir + "\" + $prog[ 0 ]
-				if ( Test-Path -Path $e ) {
-					log-Write -logstring "Starting $item" -fore green -notification 2
-					If ( $prog[ 1 ] ) {
-						$null = Start-Process -FilePath $e -ArgumentList $prog[ 1 ]
+			Function Run-Tools {
+				param ([ Parameter ( Mandatory ) ]
+				       $app
+				)
+				foreach ( $item in $app ) {
+					$prog = ($item -split '\s', 2 )
+					$e = $ScriptDir + "\" + $prog[ 0 ]
+					if ( Test-Path -Path $e ) {
+						log-Write -logstring "Starting $item" -fore green -notification 2
+						If ( $prog[ 1 ] ) {
+							$null = Start-Process -FilePath $e -ArgumentList $prog[ 1 ]
+						}
+						Else {
+							$null = Start-Process -FilePath $e
+						}
+						Start-Sleep -Seconds 1
 					}
 					Else {
-						$null = Start-Process -FilePath $e
+						Write-Host -fore Red "$e NOT found. This is not fatal. Continuing..."
 					}
-					Start-Sleep -Seconds 1
+				}
+			}
+
+			function start-Mining {
+				#####  Start STAK  #####
+				$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date )
+
+				$STAK = "$ScriptDir\$script:STAKfolder\$script:STAKexe"
+				If ( Test-Path ($STAK ) ) {
+					log-Write -logstring 'Starting STAK' -fore Yellow -notification 2
+					If ( $STAKcmdline ) {
+						Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder"
+						Start-Process -FilePath $STAK -ArgumentList $STAKcmdline -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
+					}
+					Else {
+						Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder"
+						Start-Process -FilePath $STAK -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
+					}
 				}
 				Else {
-					Write-Host -fore Red "$e NOT found. This is not fatal. Continuing..."
+					log-write -logstring "$script:STAKexe NOT FOUND.. EXITING" -fore Red -notification 0
+					Write-Host -fore Red `n`n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+					Write-Host -fore Red "         $script:STAKexe NOT found. "
+					Write-Host -fore Red "   Can't do much without the miner now can you!"
+					Write-Host -fore Red '          Now exploding... buh bye!'
+					Write-Host -fore Red !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+					Pause-Then-Exit
 				}
-			}
-		}
-
-		function start-Mining {
-			#####  Start STAK  #####
-			$timeStamp = "{0:yyyy-MM-dd_HH:mm}" -f (Get-Date )
-
-			$STAK = "$ScriptDir\$script:STAKfolder\$script:STAKexe"
-			If ( Test-Path ($STAK ) ) {
-				log-Write -logstring 'Starting STAK' -fore Yellow -notification 2
-				If ( $STAKcmdline ) {
-					Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder"
-					Start-Process -FilePath $STAK -ArgumentList $STAKcmdline -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
-				}
-				Else {
-					Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder"
-					Start-Process -FilePath $STAK -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
-				}
-			}
-			Else {
-				log-write -logstring "$script:STAKexe NOT FOUND.. EXITING" -fore Red -notification 0
-				Write-Host -fore Red `n`n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				Write-Host -fore Red "         $script:STAKexe NOT found. "
-				Write-Host -fore Red "   Can't do much without the miner now can you!"
-				Write-Host -fore Red '          Now exploding... buh bye!'
-				Write-Host -fore Red !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-				Pause-Then-Exit
-			}
-			Write-Host -fore green "Giving $script:STAKexe 10 seconds to fall over before continuing"
-			start-Sleep -Seconds 10
-			$prog = ($script:STAKexe -split '\.', 2 )
-			$prog = $prog[ 0 ]
-			$stakPROC = Get-Process -Name $prog -ErrorAction SilentlyContinue
-			if ( -not ($stakPROC ) ) {
-				write-host "$prog"
-				log-Write -logstring 'stak exited abnormally, Run manually and check output' -fore red -notification 0
-				Pause-Then-Exit
-			}
-		}
-
-		function set-STAKVars {
-			log-Write -logstring 'Setting Env Variables for STAK' -fore 0 -notification 2
-
-			[ Environment ]::SetEnvironmentVariable( 'GPU_FORCE_64BIT_PTR', '1', 'User' )
-			[ Environment ]::SetEnvironmentVariable( 'GPU_MAX_HEAP_SIZE', '99', 'User' )
-			[ Environment ]::SetEnvironmentVariable( 'GPU_MAX_ALLOC_PERCENT', '99', 'User' )
-			[ Environment ]::SetEnvironmentVariable( 'GPU_SINGLE_ALLOC_PERCENT', '99', 'User' )
-
-			log-Write -logstring 'Env Variables for STAK have been set' -fore 0 -notification 2
-		}
-
-		function get-RunTime {
-
-			param
-			([ Parameter ( Mandatory ) ]
-			 $sec
-			)
-			$myTimeSpan = (new-timespan -seconds $sec )
-			If ( $sec -ge 3600 -And $sec -lt 86400 ) {
-				$script:runHours = $myTimeSpan.Hours
-				$script:runMinutes = $myTimeSpan.Minutes
-				Return "$script:runHours Hours $script:runMinutes Min"
-			}
-			ElseIf ($sec -ge 86400) {
-				$script:runDays = $myTimeSpan.Days
-				$script:runHours = $myTimeSpan.Hours
-				$script:runMinutes = $myTimeSpan.Minutes
-				Return "$script:runDays Days $script:runHours Hours $script:runMinutes Min"
-			}
-			Elseif ($sec -ge 60 -And $sec -lt 3600) {
-				$script:runMinutes = $myTimeSpan.Minutes
-				Return "$script:runMinutes Min"
-			}
-			Elseif ($sec -lt 60) {
-				Return 'Less than 1 minute'
-			}
-		}
-
-		function Test-IsAdmin () {
-			############################## BEGIN ELEVATION #######################################
-			# If you can't Elevate you're going to have a bad time...
-			# Elevation code written by: Jonathan Bennett
-			# License: Not specified
-			# https://www.autoitscript.com/forum/topic/174609-powershell-script-to-self-elevate/
-			#
-			# Test if admin
-
-			# Get the current ID and its security principal
-			$windowsID = [ Security.Principal.WindowsIdentity ]::GetCurrent()
-			$windowsPrincipal = new-object -TypeName System.Security.Principal.WindowsPrincipal -ArgumentList ($windowsID )
-
-			# Get the Admin role security principal
-			$adminRole = [ Security.Principal.WindowsBuiltInRole ]::Administrator
-
-			# Are we an admin role?
-			if ( $windowsPrincipal.IsInRole( $adminRole ) ) {
-				$true
-			}
-			else {
-				$false
-			}
-		}
-
-		function Get-UNCFromPath {
-			Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]
-			       [ String ]
-			       $Path
-			)
-
-			if ( $Path.Contains([io.path]::VolumeSeparatorChar) ) {
-				$psdrive = Get-PSDrive -Name $Path.Substring( 0, 1 ) -PSProvider 'FileSystem'
-
-				# Is it a mapped drive?
-				if ( $psdrive.DisplayRoot ) {
-					$Path = $Path.Replace( $psdrive.Name + [ io.path ]::VolumeSeparatorChar,
-					                       $psdrive.DisplayRoot )
+				Write-Host -fore green "Giving $script:STAKexe 10 seconds to fall over before continuing"
+				start-Sleep -Seconds 10
+				$prog = ($script:STAKexe -split '\.', 2 )
+				$prog = $prog[ 0 ]
+				$stakPROC = Get-Process -Name $prog -ErrorAction SilentlyContinue
+				if ( -not ($stakPROC ) ) {
+					write-host "$prog"
+					log-Write -logstring 'stak exited abnormally, Run manually and check output' -fore red -notification 0
+					Pause-Then-Exit
 				}
 			}
 
-			return $Path
-		}
+			function set-STAKVars {
+				log-Write -logstring 'Setting Env Variables for STAK' -fore 0 -notification 2
 
-		function Resize-Console {
-			#
-			#	.Synopsis
-			#	Resets the size of the current console window
-			#	.Description
-			#	Set-myConSize resets the size of the current console window. By default, it
-			#	sets the windows to a height of 40 lines, with a 3000 line buffer, and sets the
-			#	the width and width buffer to 120 characters.
-			#	.Example
-			#	Set-myConSize
-			#	Restores the console window to 120x40
-			#	.Example
-			#	Set-myConSize -Height 30 -Width 180
-			#	Changes the current console to a height of 30 lines and a width of 180 characters.
-			#	.Parameter Height
-			#	The number of lines to which to set the current console. The default is 40 lines.
-			#	.Parameter Width
-			#	The number of characters to which to set the current console. Default is 120. Also sets the buffer to the same value
-			#	.Inputs
-			#	[int]
-			#	[int]
-			#	.Notes
-			#		Author: Charlie Russel
-			#		Modified by: TheJerichoJones
-			#	 Copyright: 2017 by Charlie Russel
-			#			  : Permission to use is granted but attribution is appreciated
-			#	   Initial: 28 April, 2017 (cpr)
-			#	   ModHist:
-			#
-			$Height = $consoleHeight
-			$Width = $consoleWidth
-			$Console = $host.ui.rawui
-			$Buffer = $Console.BufferSize
-			$ConSize = $Console.WindowSize
+				[ Environment ]::SetEnvironmentVariable( 'GPU_FORCE_64BIT_PTR', '1', 'User' )
+				[ Environment ]::SetEnvironmentVariable( 'GPU_MAX_HEAP_SIZE', '99', 'User' )
+				[ Environment ]::SetEnvironmentVariable( 'GPU_MAX_ALLOC_PERCENT', '99', 'User' )
+				[ Environment ]::SetEnvironmentVariable( 'GPU_SINGLE_ALLOC_PERCENT', '99', 'User' )
 
-			# If the Buffer is wider than the new console setting, first reduce the buffer, then do the resize
-
-			try {
-				if ( $ConSize.Width ) {
-					If ( $Buffer.Width -gt $Width -or $Buffer.Height -gt $Height ) {
-						If ( $Buffer.Width -gt $Width ) {
-							$ConSize.Width = $Width
-						}
-						If ( $Buffer.Height -gt $Height ) {
-							$ConSize.Height = $Height
-						}
-						$Console.WindowSize = $ConSize
-					}
-					$Buffer.Width = $Width
-
-					$ConSize.Width = $Width
-					$Buffer.Height = $Height
-					$Console.BufferSize = $Buffer
-					$ConSize = $Console.WindowSize
-					$ConSize.Width = $Width
-					$ConSize.Height = $Height
-					$Console.WindowSize = $ConSize
-					try {
-						[console]::CursorVisible = $false
-					}
-					catch {
-						Write-Host "Should only see this message in an ide"
-					}
-
-				}
-			}
-			# NOTE: When you use a SPECIFIC catch block, exceptions thrown by -ErrorAction Stop MAY LACK
-			# some InvocationInfo details such as ScriptLineNumber.
-			# REMEDY: If that affects you, remove the SPECIFIC exception type [System.Management.Automation.PropertyNotFoundException] in the code below
-			# and use ONE generic catch block instead. Such a catch block then handles ALL error types, so you would need to
-			# add the logic to handle different error types differently by yourself.
-			catch [ Management.Automation.PropertyNotFoundException ] {
-				# get error record
-				[ Management.Automation.ErrorRecord ]$e = $_
-
-				# retrieve information about runtime error
-				$info = [ PSCustomObject ]@{
-					Exception = $e.Exception.Message
-					Reason = $e.CategoryInfo.Reason
-					Target = $e.CategoryInfo.TargetName
-					Script = $e.InvocationInfo.ScriptName
-					Line = $e.InvocationInfo.ScriptLineNumber
-					Column = $e.InvocationInfo.OffsetInLine
-				}
-
-				# output information. Post-process collected info, and log info (optional)
-				$info
+				log-Write -logstring 'Env Variables for STAK have been set' -fore 0 -notification 2
 			}
 
+			function get-RunTime {
 
-		}
-
-		function disable_crossfire {
-			$videocards = Get-ChildItem -Path 'hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction Ignore |
-			              Select-Object -ExpandProperty Name
-			$registrychanges = 0
-			Foreach ( $videocard in $videocards ) {
-				$cardnumber = ''
-				$cardnumber = ($videocard -split '{4d36e968-e325-11ce-bfc1-08002be10318}' )[ 1 ]
-				$cardpath = ''
-				$cardpath = Test-RegistryKeyValue -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}$cardnumber" -Name 'EnableUlps'
-				$videocardName = ''
-				$videocardnamepath = Test-RegistryKeyValue -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\$cardnumber" -Name 'DriverDesc'
-				if ( $videocardnamepath -eq 'True' ) {
-					$videocardName = Get-ItemPropertyValue -Name DriverDesc -Path ("hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\$cardnumber" ) -ErrorAction Ignore
+				param
+				([ Parameter ( Mandatory ) ]
+				 $sec
+				)
+				$myTimeSpan = (new-timespan -seconds $sec )
+				If ( $sec -ge 3600 -And $sec -lt 86400 ) {
+					$script:runHours = $myTimeSpan.Hours
+					$script:runMinutes = $myTimeSpan.Minutes
+					Return "$script:runHours Hours $script:runMinutes Min"
 				}
-
-				if ( $cardpath -eq 'True' -And $videocardName -like 'Radeon Vega Frontier Edition' ) {
-					Set-ItemProperty -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}$cardnumber" -Name EnableUlps -Value 0
-
-					Set-ItemProperty -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}$cardnumber" -Name EnableCrossFireAutoLink -Value 0
-					$registrychanges++
-					Write-Host "$videocardName Registry settings applied, crossfire is disabled"
+				ElseIf ($sec -ge 86400) {
+					$script:runDays = $myTimeSpan.Days
+					$script:runHours = $myTimeSpan.Hours
+					$script:runMinutes = $myTimeSpan.Minutes
+					Return "$script:runDays Days $script:runHours Hours $script:runMinutes Min"
 				}
-			}
-		}
-
-		function Supported-Cards-OK {
-			$d = $null
-			$d = Get-PnpDevice|
-			     Where-Object { ($_.friendlyname -in $supported_cards ) -and ($_.Status -like 'Error' ) }
-			If ( $d ) {
-				return $false
-			}
-			else {
-				return $true
-			}
-		}
-
-		Function test-cards {
-			[ int ]
-			$boardCount, $null = (clinfo.exe  | sls  "Board Name" -ErrorAction SilentlyContinue |
-			                      sls -n "n/a" ).count
-			if ( $boardCount -ge 1 ) {
-				[ int ]$boardActual = $boardCount - 1
-				log-write -logstring "Device count $boardActual" -fore red -notification 1
-				$deviceinfodebug = (clinfo.exe | sls  "Board Name" ) -replace 'Board Name:'
-				if ( $deviceinfodebug ) {
-					log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red -notification 3
+				Elseif ($sec -ge 60 -And $sec -lt 3600) {
+					$script:runMinutes = $myTimeSpan.Minutes
+					Return "$script:runMinutes Min"
 				}
-				if ( $boardActual -lt $installedCards ) {
-					log-write -logstring "Cards seen $boardActual is less than installedCards setting of $installedCards" -fore red -notification 1
-					Reboot-If-Enabled
-				}
-				if ( $boardActual -gt $installedCards ) {
-					$installedCards = $boardActual
+				Elseif ($sec -lt 60) {
+					Return 'Less than 1 minute'
 				}
 			}
-			$test = (Supported-Cards-OK )
-			if ( $test -eq "True" ) {
-				Write-Host 'Driver Status is OK' -fore Green
-			}
-			else {
-				if ( $ResetCardOnStartup -ne 'True' ) {
-					log-Write -logstring 'Driver in error state, Resetting' -fore red -notification 1
-					reset-VideoCard
-				}
-				log-write -logstring 'Re-Checking Driver for error status in 5 seconds' -fore Blue -notification 4
-				Start-Sleep -Seconds 5
-				write-host 'Gpu OK ' (Supported-Cards-OK )
-				if ( Supported-Cards-OK ) {
-					Write-Host "GPU's OK" -fore Green
+
+			function Test-IsAdmin () {
+				############################## BEGIN ELEVATION #######################################
+				# If you can't Elevate you're going to have a bad time...
+				# Elevation code written by: Jonathan Bennett
+				# License: Not specified
+				# https://www.autoitscript.com/forum/topic/174609-powershell-script-to-self-elevate/
+				#
+				# Test if admin
+
+				# Get the current ID and its security principal
+				$windowsID = [ Security.Principal.WindowsIdentity ]::GetCurrent()
+				$windowsPrincipal = new-object -TypeName System.Security.Principal.WindowsPrincipal -ArgumentList ($windowsID )
+
+				# Get the Admin role security principal
+				$adminRole = [ Security.Principal.WindowsBuiltInRole ]::Administrator
+
+				# Are we an admin role?
+				if ( $windowsPrincipal.IsInRole( $adminRole ) ) {
+					$true
 				}
 				else {
-					log-Write -logstring "Driver in error state" -fore red -notification 1
-					reboot-If-Enabled
-				} # End of device test
-			} # End of driver error
-		}
-
-		Function Reboot-If-Enabled {
-			Log-Write -logstring "Checking if reboot enabled: $rebootEnabled" -fore Red -notification 4
-			if ( $rebootEnabled -eq 'True' ) {
-				log-Write -logstring "Reboot enabled, Resetting in $rebootTimeout seconds " -fore red -notification 0
-				Start-Sleep -Seconds $rebootTimeout
-				Restart-Computer -Force
-				EXIT
-			}
-			else {
-				log-Write -logstring 'Reboot not enabled' -fore red -notification 0
-				Pause-Then-Exit
-			}
-		}
-
-		Function quickcheckSTAK {
-			param ([ Parameter ( Mandatory ) ]$script:Url
-			)
-			log-Write -logstring 'Quick Check Stak' -fore yellow -notification 4
-
-			$flag = 'False'
-			$web = New-Object -TypeName System.Net.WebClient
-
-			$ts = New-TimeSpan -Seconds $runningSTAKtimeout
-			$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
-			DO {
-				Try {
-					$null = $web.DownloadString( $script:Url )
-					$flag = 'True'
-					$script:STAKisup = $true
+					$false
 				}
-				Catch {
-					$timeDiff = (($elapsedTimer.Elapsed - $ts ).Seconds ) -replace '-'
-					Write-Host -fore Green -NoNewline $timeDiff
-					$script:STAKisup = $false
+			}
+
+			function Get-UNCFromPath {
+				Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]
+				       [ String ]
+				       $Path
+				)
+
+				if ( $Path.Contains( [ io.path ]::VolumeSeparatorChar ) ) {
+					$psdrive = Get-PSDrive -Name $Path.Substring( 0, 1 ) -PSProvider 'FileSystem'
+
+					# Is it a mapped drive?
+					if ( $psdrive.DisplayRoot ) {
+						$Path = $Path.Replace( $psdrive.Name + [ io.path ]::VolumeSeparatorChar, $psdrive.DisplayRoot )
+					}
 				}
-			} While (($elapsedTimer.Elapsed -lt $ts ) -And ($flag -eq 'False' ))
-			$elapsedTimer.Stop()
 
-			If ( -not ($script:STAKisup ) ) {
-				Clear-Host
-				# Check if profit switching is enabled and generate pools.txt if it is using pools.json
-				if ( $profitSwitching -eq 'True' ) {
+				return $Path
+			}
 
-					log-write -logstring "Profit switching enabled" -fore green -notification 1
-					if ( read-Pools-File ) {
-						check-Profit-Stats $script:PoolsList.Keys $minhashrate
-						get-coin-specific-parameters
-						write-xmrstak-Pools-File
-						write-host "Starting mining using the following pools.txt"
-						get-content -path "$STAKfolder\$poolsdottext"
-						log-write -logstring "Continuing in $sleeptime seconds" -fore yellow -notification 4
-						start-sleep -s $sleeptime
+			function Resize-Console {
+				#
+				#	.Synopsis
+				#	Resets the size of the current console window
+				#	.Description
+				#	Set-myConSize resets the size of the current console window. By default, it
+				#	sets the windows to a height of 40 lines, with a 3000 line buffer, and sets the
+				#	the width and width buffer to 120 characters.
+				#	.Example
+				#	Set-myConSize
+				#	Restores the console window to 120x40
+				#	.Example
+				#	Set-myConSize -Height 30 -Width 180
+				#	Changes the current console to a height of 30 lines and a width of 180 characters.
+				#	.Parameter Height
+				#	The number of lines to which to set the current console. The default is 40 lines.
+				#	.Parameter Width
+				#	The number of characters to which to set the current console. Default is 120. Also sets the buffer to the same value
+				#	.Inputs
+				#	[int]
+				#	[int]
+				#	.Notes
+				#		Author: Charlie Russel
+				#		Modified by: TheJerichoJones
+				#	 Copyright: 2017 by Charlie Russel
+				#			  : Permission to use is granted but attribution is appreciated
+				#	   Initial: 28 April, 2017 (cpr)
+				#	   ModHist:
+				#
+				$Height = $consoleHeight
+				$Width = $consoleWidth
+				$Console = $host.ui.rawui
+				$Buffer = $Console.BufferSize
+				$ConSize = $Console.WindowSize
+
+				# If the Buffer is wider than the new console setting, first reduce the buffer, then do the resize
+
+				try {
+					if ( $ConSize.Width ) {
+						If ( $Buffer.Width -gt $Width -or $Buffer.Height -gt $Height ) {
+							If ( $Buffer.Width -gt $Width ) {
+								$ConSize.Width = $Width
+							}
+							If ( $Buffer.Height -gt $Height ) {
+								$ConSize.Height = $Height
+							}
+							$Console.WindowSize = $ConSize
+						}
+						$Buffer.Width = $Width
+
+						$ConSize.Width = $Width
+						$Buffer.Height = $Height
+						$Console.BufferSize = $Buffer
+						$ConSize = $Console.WindowSize
+						$ConSize.Width = $Width
+						$ConSize.Height = $Height
+						$Console.WindowSize = $ConSize
+						try {
+							[console]::CursorVisible = $false
+						}
+						catch {
+							Write-Host "Should only see this message in an ide"
+						}
+
+					}
+				}
+				# NOTE: When you use a SPECIFIC catch block, exceptions thrown by -ErrorAction Stop MAY LACK
+				# some InvocationInfo details such as ScriptLineNumber.
+				# REMEDY: If that affects you, remove the SPECIFIC exception type [System.Management.Automation.PropertyNotFoundException] in the code below
+				# and use ONE generic catch block instead. Such a catch block then handles ALL error types, so you would need to
+				# add the logic to handle different error types differently by yourself.
+				catch [ Management.Automation.PropertyNotFoundException ] {
+					# get error record
+					[ Management.Automation.ErrorRecord ]$e = $_
+
+					# retrieve information about runtime error
+					$info = [ PSCustomObject ]@{
+						Exception = $e.Exception.Message
+						Reason = $e.CategoryInfo.Reason
+						Target = $e.CategoryInfo.TargetName
+						Script = $e.InvocationInfo.ScriptName
+						Line = $e.InvocationInfo.ScriptLineNumber
+						Column = $e.InvocationInfo.OffsetInLine
+					}
+
+					# output information. Post-process collected info, and log info (optional)
+					$info
+				}
+
+
+			}
+
+			function disable_crossfire {
+				$videocards = Get-ChildItem -Path 'hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction Ignore |
+				              Select-Object -ExpandProperty Name
+				$registrychanges = 0
+				Foreach ( $videocard in $videocards ) {
+					$cardnumber = ''
+					$cardnumber = ($videocard -split '{4d36e968-e325-11ce-bfc1-08002be10318}' )[ 1 ]
+					$cardpath = ''
+					$cardpath = Test-RegistryKeyValue -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}$cardnumber" -Name 'EnableUlps'
+					$videocardName = ''
+					$videocardnamepath = Test-RegistryKeyValue -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\$cardnumber" -Name 'DriverDesc'
+					if ( $videocardnamepath -eq 'True' ) {
+						$videocardName = Get-ItemPropertyValue -Name DriverDesc -Path ("hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\$cardnumber" ) -ErrorAction Ignore
+					}
+
+					if ( $cardpath -eq 'True' -And $videocardName -like 'Radeon Vega Frontier Edition' ) {
+						Set-ItemProperty -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}$cardnumber" -Name EnableUlps -Value 0
+
+						Set-ItemProperty -Path "hklm:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}$cardnumber" -Name EnableCrossFireAutoLink -Value 0
+						$registrychanges++
+						Write-Host "$videocardName Registry settings applied, crossfire is disabled"
+					}
+				}
+			}
+
+			function Supported-Cards-OK {
+				$d = $null
+				$d = Get-PnpDevice|
+				     Where-Object { ($_.friendlyname -in $supported_cards ) -and ($_.Status -like 'Error' ) }
+				If ( $d ) {
+					return $false
+				}
+				else {
+					return $true
+				}
+			}
+
+			Function test-cards {
+				[ int ]
+				$boardCount, $null = (clinfo.exe  | sls  "Board Name" -ErrorAction SilentlyContinue |
+				                      sls -n "n/a" ).count
+				if ( $boardCount -ge 1 ) {
+					[ int ]$boardActual = $boardCount - 1
+					log-write -logstring "Device count $boardActual" -fore red -notification 1
+					$deviceinfodebug = (clinfo.exe | sls  "Board Name" ) -replace 'Board Name:'
+					if ( $deviceinfodebug ) {
+						log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red -notification 3
+					}
+					if ( $boardActual -lt $installedCards ) {
+						log-write -logstring "Cards seen $boardActual is less than installedCards setting of $installedCards" -fore red -notification 1
+						Reboot-If-Enabled
+					}
+					if ( $boardActual -gt $installedCards ) {
+						$installedCards = $boardActual
+					}
+				}
+				$test = (Supported-Cards-OK )
+				if ( $test -eq "True" ) {
+					Write-Host 'Driver Status is OK' -fore Green
+				}
+				else {
+					if ( $ResetCardOnStartup -ne 'True' ) {
+						log-Write -logstring 'Driver in error state, Resetting' -fore red -notification 1
+						reset-VideoCard
+					}
+					log-write -logstring 'Re-Checking Driver for error status in 5 seconds' -fore Blue -notification 4
+					Start-Sleep -Seconds 5
+					write-host 'Gpu OK ' (Supported-Cards-OK )
+					if ( Supported-Cards-OK ) {
+						Write-Host "GPU's OK" -fore Green
 					}
 					else {
-						log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
-						log-write -logstring "Error messages `n $( $Error[ 0 ].InvocationInfo.line )"
+						log-Write -logstring "Driver in error state" -fore red -notification 1
+						reboot-If-Enabled
+					} # End of device test
+				} # End of driver error
+			}
+
+			Function Reboot-If-Enabled {
+				Log-Write -logstring "Checking if reboot enabled: $rebootEnabled" -fore Red -notification 4
+				if ( $rebootEnabled -eq 'True' ) {
+					log-Write -logstring "Reboot enabled, Resetting in $rebootTimeout seconds " -fore red -notification 0
+					Start-Sleep -Seconds $rebootTimeout
+					Restart-Computer -Force
+					EXIT
+				}
+				else {
+					log-Write -logstring 'Reboot not enabled' -fore red -notification 0
+					Pause-Then-Exit
+				}
+			}
+
+			Function quickcheckSTAK {
+				param ([ Parameter ( Mandatory ) ]$script:Url
+				)
+				log-Write -logstring 'Quick Check Stak' -fore yellow -notification 4
+
+				$flag = 'False'
+				$web = New-Object -TypeName System.Net.WebClient
+
+				$ts = New-TimeSpan -Seconds $runningSTAKtimeout
+				$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
+				DO {
+					Try {
+						$null = $web.DownloadString( $script:Url )
+						$flag = 'True'
+						$script:STAKisup = $true
+
+					}
+					Catch {
+						$timeDiff = (($elapsedTimer.Elapsed - $ts ).Seconds ) -replace '-'
+						Write-Host -fore Green -NoNewline $timeDiff
+						$script:STAKisup = $false
+					}
+				} While (($elapsedTimer.Elapsed -lt $ts ) -And ($flag -eq 'False' ))
+				$elapsedTimer.Stop()
+				check-room-temps
+				If ( -not ($script:STAKisup ) ) {
+					Clear-Host
+					# Check if profit switching is enabled and generate pools.txt if it is using pools.json
+					if ( $profitSwitching -eq 'True' ) {
+
+						log-write -logstring "Profit switching enabled" -fore green -notification 1
+						if ( read-Pools-File ) {
+							check-Profit-Stats $script:PoolsList.Keys $minhashrate
+							get-coin-specific-parameters
+							write-xmrstak-Pools-File
+							write-host "Starting mining using the following pools.txt"
+							get-content -path "$STAKfolder\$poolsdottext"
+							log-write -logstring "Continuing in $sleeptime seconds" -fore yellow -notification 4
+							start-sleep -s $sleeptime
+						}
+						else {
+							log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
+							log-write -logstring "Error messages `n $( $Error[ 0 ].InvocationInfo.line )"
+						}
+					}
+
+					kill-Process -STAKexe ($STAKexe )
+					if ( $ResetCardOnStartup -eq 'True' ) {
+						reset-VideoCard -force $true
+					}
+					test-cards
+					disable_crossfire
+					& "$env:windir\system32\ipconfig.exe" /FlushDNS
+					If ( ! (Supported-Cards-OK ) ) {
+						reset-VideoCard
+					}
+					If ( $script:vidToolArray ) {
+						Run-Tools -app ($script:vidToolArray )
+					}
+					set-STAKVars # Set  environment variables
+					start-Mining # Start mining software
+				}
+			}
+
+			Function chk-STAK {
+				param ([ Parameter ( Mandatory ) ]
+				       $script:Url
+				)
+
+				$flag = 'False'
+				$web = New-Object -TypeName System.Net.WebClient
+				$ts = New-TimeSpan -Seconds $timeout
+				$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
+				DO {
+					Try {
+						$null = $web.DownloadString( $script:Url )
+						$flag = 'True'
+					}
+					Catch {
+						Clear-Host
+						$timeDiff = (($elapsedTimer.Elapsed - $ts ).Seconds ) -replace '-'
+						Write-host -fore Red "STAK not ready... Waiting up to $timeDiff seconds."
+						Write-host -fore Red 'Press CTRL-C to EXIT NOW'
+						Start-Sleep -Seconds 1
+					}
+				} While (($elapsedTimer.Elapsed -lt $ts ) -And ($flag -eq 'False' ))
+				$elapsedTimer.Stop()
+
+				If ( $flag -eq 'True' ) {
+					Clear-Host
+					log-Write -logstring 'STAK API responding' -fore Green -notification 5
+				}
+				ElseIf ($flag -eq 'False') {
+					Clear-Host
+					log-Write -logstring '!! Timed out waiting for STAK HTTP daemon to start !!' -fore red -notification 1
+
+					# Check for hanging stak on startup, This can also be caused by setting STAKmin too low
+					if ( check-Process -exe $script:STAKexe ) {
+						$startattempt += 1
+						log-Write -fore red -logstring "Abnormal Stak process seems to have hung on strartup or your minhashrate $minhashrate is too low, attempt $startattempt" -notification 1
+						if ( ($startattempt -ge $STAKMaxStartAttempts ) -and ($STAKMaxStartAttempts -gt 0 ) ) {
+							log-write -logstring "Restarting computer in 10 seconds"  -fore red -notification 0
+							start-sleep -s 10
+							reboot-If-Enabled
+						}
+						elseif (($startattempt -ge $STAKMaxStartAttempts ) -and ($STAKMaxStartAttempts -eq 0 ) ) {
+							log-write -logstring "Reboot disabled, stopping here, please investigate STAK startup" -fore red -notification 0
+							Pause-Then-Exit
+						}
+						else {
+							call-self
+						}
 					}
 				}
-
-				kill-Process -STAKexe ($STAKexe )
-				if ( $ResetCardOnStartup -eq 'True' ) {
-					reset-VideoCard -force $true
-				}
-				test-cards
-				disable_crossfire
-				& "$env:windir\system32\ipconfig.exe" /FlushDNS
-				If ( ! (Supported-Cards-OK ) ) {
-					reset-VideoCard
-				}
-				If ( $script:vidToolArray ) {
-					Run-Tools -app ($script:vidToolArray )
-				}
-				set-STAKVars # Set  environment variables
-				start-Mining # Start mining software
-			}
-		}
-
-		Function chk-STAK {
-			param ([ Parameter ( Mandatory ) ]
-			       $script:Url
-			)
-
-			$flag = 'False'
-			$web = New-Object -TypeName System.Net.WebClient
-			$ts = New-TimeSpan -Seconds $timeout
-			$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
-			DO {
-				Try {
-					$null = $web.DownloadString( $script:Url )
-					$flag = 'True'
-				}
-				Catch {
+				Else {
 					Clear-Host
-					$timeDiff = (($elapsedTimer.Elapsed - $ts ).Seconds ) -replace '-'
-					Write-host -fore Red "STAK not ready... Waiting up to $timeDiff seconds."
-					Write-host -fore Red 'Press CTRL-C to EXIT NOW'
+					log-Write -logstring 'Unknown failure starting STAK (Daemon failed to start?)' -fore red -notification 0
+					Pause-Then-Exit
+				}
+			}
+
+			function check-Process {
+				param ([ Parameter ( Mandatory ) ]
+				       $exe
+				)
+				try {
+					$prog = ($exe -split '\.', 2 )
+					$prog = $prog[ 0 ]
+
+					# get process
+					$app = Get-Process -Name $prog -ErrorAction SilentlyContinue
+					if ( $app ) {
+						return $true
+					}
+					else {
+						return $false
+					}
+				}
+				catch {
+					return $false
+				}
+
+			}
+
+			function dead-Thread-Check {
+				param ([ Parameter ( Mandatory ) ]
+				       $threads
+				)
+				log-write -logstring "Dead thread check" -fore yellow -notification 1
+				$nullThreadsReturned = 0
+
+				foreach ( $thread in $threads ) {
+
+					if ( $thread[ 0 ] ) {
+						write-host "Thread ok $( $thread[ 0 ] )"
+					}
+					else {
+						write-host "null thread"
+						$nullThreadsReturned += 1
+					}
+
+
+				}
+
+				log-write -logstring "$nullThreadsReturned dead threads found" -fore yellow -notification 1
+				Start-Sleep -s 3
+				if ( $nullThreadsReturned -gt 0 ) {
+					log-write -logstring "Dead threads detected, Most likely going to need a reboot " -fore red -notification 1
+					kill-Process -STAKexe ($STAKexe )
+					$script:STAKisup = $false
+					if ( $ResetCardOnStartup -ne 'True' ) {
+						reset-VideoCard -Force $true
+					}
+					$script:currHash = 0
+					call-Self
+				}
+			}
+
+
+			function starting-Hash {
+				log-Write -logstring 'Waiting for hash rate to stabilize' -fore Yellow -notification 5
+				$ts = New-TimeSpan -Seconds $STAKstable
+				$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
+				$flag = $false
+				# Wait $STAKstable seconds for hash rate to stabilize
+				while ( ($elapsedTimer.Elapsed -lt $ts ) -And (-Not ($flag ) ) ) {
+					$currTestHash = 0
+					$data = $null
+					$total = $null
+					$data = @{ }
+					$total = @{ }
+					$rawdata = (Invoke-WebRequest -UseBasicParsing -Uri $script:Url -TimeoutSec 60 ) -replace '\\', '\\'
+					If ( $rawdata ) {
+						$data = $rawdata | ConvertFrom-Json
+						$rawtotal = ($data.hashrate ).total
+						$total = $rawtotal | ForEach-Object { $_ }
+
+						$currTestHash = $total[ 0 ]
+						If ( ! $startTestHash ) {
+							$startTestHash = $currTestHash
+						}
+						If ( $script:STAKisup ) {
+							log-Write -logstring 'STAK was already running, Skipping wait time' -fore Green -notification 5
+							dead-Thread-Check ($data.hashrate ).threads
+							$flag = $true
+							BREAK
+						}
+
+						Clear-Host
+						If ( $currTestHash ) {
+							Write-host -fore Green "Current Hash Rate: $currTestHash H/s"
+						}
+						$timeDiff = (($elapsedTimer.Elapsed - $ts ).Seconds ) -replace '-'
+						Write-host -fore Green "Waiting $timeDiff seconds for hashrate to stabilize."
+						Write-host -fore Red 'Press CTRL-C to EXIT NOW'
+
+						$script:currHash = $currTestHash
+						if ( $currTestHash -gt 0 ) {
+							# Hashrate Per Thread
+							$rawthread = ($data.hashrate ).threads
+							$threads = @($rawthread | ForEach-Object { $_[ 0 ] })
+							$script:threadArray = $threads
+							grafana
+							If ( ($currTestHash -lt $minhashrate ) -and ($timeDiff -gt $minlowratecheck ) ) {
+								lowratecheck $minlowratecheck
+								$flag = $true
+							}
+						}
+					}
 					Start-Sleep -Seconds 1
 				}
-			} While (($elapsedTimer.Elapsed -lt $ts ) -And ($flag -eq 'False' ))
-			$elapsedTimer.Stop()
+				$elapsedTimer.Stop()
 
-			If ( $flag -eq 'True' ) {
-				Clear-Host
-				log-Write -logstring 'STAK API responding' -fore Green -notification 5
+				If ( ! $currTestHash ) {
+					dead-Thread-Check ($data.hashrate ).threads
+					Clear-Host
+					log-Write -logstring 'Could not get hashrate... restarting in 3 seconds' -fore Red -notification 1
+					log-Write -logstring "API data from failure `n$rawdata" -fore red -notification 4
+					Start-Sleep -Seconds 3
+					call-Self
+				}
+				ElseIf ( $currTestHash -gt $startTestHash) {
+					$script:maxhash = $currTestHash
+				}
+				Else {
+					$script:maxhash = $startTestHash
+				}
+
+				$script:currHash = $currTestHash
+				$script:rTarget = ($script:maxhash - $script:hdiff )
+				log-Write -logstring "Starting Hashrate: $script:maxhash H/s	Drop Target Hashrate: $script:rTarget H/s" -fore Green -notification 1
 			}
-			ElseIf ($flag -eq 'False') {
-				Clear-Host
-				log-Write -logstring '!! Timed out waiting for STAK HTTP daemon to start !!' -fore red -notification 1
 
-				# Check for hanging stak on startup, This can also be caused by setting STAKmin too low
-				if ( check-Process -exe $script:STAKexe ) {
-					$startattempt += 1
-					log-Write -fore red -logstring "Abnormal Stak process seems to have hung on strartup or your minhashrate $minhashrate is too low, attempt $startattempt" -notification 1
-					if ( ($startattempt -ge $STAKMaxStartAttempts ) -and ($STAKMaxStartAttempts -gt 0 ) ) {
-						log-write -logstring "Restarting computer in 10 seconds"  -fore red -notification 0
-						start-sleep -s 10
-						reboot-If-Enabled
-					}
-					elseif (($startattempt -ge $STAKMaxStartAttempts ) -and ($STAKMaxStartAttempts -eq 0 ) ) {
-						log-write -logstring "Reboot disabled, stopping here, please investigate STAK startup" -fore red -notification 0
-						Pause-Then-Exit
+			function current-Hash {
+				If ( $script:rTarget -gt $minhashrate ) {
+					$minhashrate = $script:rTarget
+				}
+				clear-host
+				log-Write -logstring 'Hash monitoring has begun.' -fore Green -notification 3
+				$timer = 0
+				$runTime = 0
+				$flag = 'False'
+				DO {
+					refreshSTAK
+					refresh-Screen
+					grafana
+					Start-Sleep -Seconds $sleeptime
+					$timer = ($timer + $sleeptime )
+					$runTime = ($timer )
+				} while ($script:currHash -gt $minhashrate )
+
+				If ( $script:currHash -lt $minhashrate ) {
+					lowratecheck $minhashrate
+					refreshSTAK
+				}
+
+				If ( ($flag -eq 'True' ) -And ($script:currHash -lt $minhashrate ) ) {
+					$tFormat = get-RunTime -sec ($runTime )
+					log-Write -logstring "Restarting in 10 seconds after $tFormat - Hash rate dropped from $script:maxhash H/s to $script:currHash H/s" -fore Red -notification 1
+					Start-Sleep -Seconds 10
+					$script:STAKisup = $false
+					kill-Process -STAKexe ($STAKexe )
+					call-self
+				}
+			}
+
+			function lowratecheck {
+				Param ([ Parameter ( Mandatory ) ]
+				       [ int ]
+				       $ratetocheck
+				)
+				$tFormat = get-RunTime -sec ($runTime )
+				log-Write -logstring "Low hash rate check triggered: after $tFormat - Hash rate dropped from $script:maxhash H/s to $script:currHash H/s" -fore Red -notification 1
+				$flag = 'False'
+				Check-Network # Check we have internet access
+				refreshSTAK   # Re-check STAK, Check-Network can be infinate
+
+				$ts = New-TimeSpan -Seconds 60
+				$deadTimer = [ Diagnostics.Stopwatch ]::StartNew()
+				# Check if we are connected  to a pool
+				while ( ($script:UpTime -eq 0 ) -And ($deadTimer.Elapsed -lt $ts ) ) {
+					write-host -fore red "Conection died, Pausing for up to $ts Seconds for it too recover $( ($deadTimer.Elapsed ).Seconds )"
+					Start-Sleep -Seconds 1
+					refreshSTAK
+					$flag = 'True'
+				}
+				$deadTimer.stop()
+
+				if ( $script:currHash -gt $ratetocheck ) {
+					$flag = 'True'
+				}
+				$ts = New-TimeSpan -Seconds $script:retrytimer
+				$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
+
+				# Hashdrop testing loop
+				While ( (($elapsedTimer.Elapsed -lt $ts ).Seconds ) -and ($flag -eq 'False' ) ) {
+					clear-host
+					refreshSTAK
+					$countdown = (($elapsedTimer.Elapsed -le $ts ).Seconds ) -replace '-'
+					Write-host -fore Red "Hash rate $script:currHash H/s less than set minimum $ratetocheck H/s"
+					Write-host -fore Red "Waiting for $countdown seconds for it to recover"
+
+					if ( $script:currHash -gt $ratetocheck ) {
+						Write-Host -fore Green 'Above min hash rate'
+						$flag = 'True'
+						break
 					}
 					else {
-						call-self
+						Write-Host -fore Red 'Below min hash rate'
+					}
+					Start-Sleep -Seconds 1 # Itteration wait time
+				}
+
+				if ( $flag -eq 'False' ) {
+					log-Write -logstring "Restarting Script after $tFormat - Hash rate $script:currHash H/s less than set minimum $ratetocheck H/s" -fore red -notification 1
+					kill-Process -STAKexe ($STAKexe )
+					$script:STAKisup = $false
+					if ( (Supported-Cards-OK ) -and ($ResetCardOnStartup -ne 'True' ) ) {
+						reset-VideoCard -Force $true # Low rate triggered but driver ok, lets force a card reset and exit
+					}
+					$script:currHash = 0
+					call-Self
+				}
+				elseif ((($deadTimer.Elapsed ).seconds -gt 1 ) -and ($flag = 'True' )) {
+					log-Write -logstring "Temporary connection issue > 1s, Recovery time $( ($deadTimer.Elapsed ).seconds )"  -fore Red -notification 1
+				}
+				refreshSTAK
+			}
+
+			function kill-Process {
+				param ([ Parameter ( Mandatory ) ]
+				       $STAKexe
+				)
+				try {
+					$prog = ($STAKexe -split '\.', 2 )
+					$prog = $prog[ 0 ]
+					$failureMessage = "
+            Failed to kill the process $prog
+            If we don't stop here STAK would be invoked over and over until the PC crashed.
+          That would be very bad...."
+
+					# get STAK process
+					$stakPROC = Get-Process -Name $prog -ErrorAction SilentlyContinue
+					if ( $stakPROC ) {
+						# try gracefully first
+						$null = $stakPROC.CloseMainWindow()
+						# kill after five seconds
+						Start-Sleep -Seconds 5
+						if ( ! $stakPROC.HasExited ) {
+							$null = $stakPROC | Stop-Process -Force
+						}
+						if ( ! $stakPROC.HasExited ) {
+							Write-host -fore Red $failureMessage
+							log-Write -logstring "Failed to kill $prog" -fore 0 -notification 1
+							Pause-Then-Exit
+						}
+						Else {
+							log-Write -logstring 'STAK closed successfully' -fore Green -notification 5
+						}
+					}
+					Else {
+						log-Write -logstring "$prog process was not found" -Fore Green -notification 5
+					}
+				}
+				Catch {
+					Write-host -fore Red failureMessage
+					log-Write -logstring "Failed to kill $prog" -fore 0 -notification 0
+					Pause-Then-Exit
+				}
+			}
+
+			Function grafana {
+				if ( $grafanaEnabled -eq 'True' ) {
+					$Metrics = @{
+						Total_Hash_Rate = [ int ]$script:currHash
+						Difficulty = [ int ]$script:currDiff
+						Total_Shares = [ int ]$script:TotalShares
+						Good_Shares = [ int ]$script:GoodShares
+						Average_time = [ int ]$script:TimeShares
+					}
+
+					# Add in per thread hashrate
+					if ( $script:threadArray[ 0 ] ) {
+						$script:threadArray | ForEach-Object -Begin { $seq = 0 } -Process {
+							$key = "Thread_$seq"
+							$Metrics.add( $key, $script:threadArray[ $seq ] )
+							$seq++
+						}
+					}
+
+
+					if ( $script:lastRoomTemp ) {
+						$t = [Decimal]($script:lastRoomTemp ).OuterTemp
+						$Metrics.add( "Room_Temp_float", $t )
+
+					}
+
+
+					if ( $script:enableNanopool -eq 'True' ) {
+						if ( ($runTime - $script:nanopoolLastUpdate ) -ge 1 ) {
+
+							try {
+								nanopoolvars
+								if ( $script:provider -ne 'nanopool' ) {
+									log-write -logstring "Not using Nanopool, you are using $script:provider, disabling stats" -fore red -notification 1
+									$script:enableNanopool = 'False'
+								}
+								else {
+									[ Decimal ]$script:balance = [ math ]::Round( (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,
+									                                              4 )
+									[ Decimal ]$script:btcprice = [ Double ]((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
+									[ int ]$script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker ).data.'h1'
+
+									$profitData = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash ).data
+									[ decimal ]$script:coins = [ math ]::Round( $profitData.$coinStats.'coins', 8 )
+									[ decimal ]$script:dollars = [ math ]::Round( $profitData.$coinStats.'dollars',
+									                                              4 )
+
+									$Metrics.add( 'balance', $script:balance )
+									$Metrics.add( 'btcprice', $script:btcprice )
+									$Metrics.add( "estCoin$coinStats", $script:coins )
+									$Metrics.add( "estDollar$coinStats", $script:dollars )
+									$Metrics.add( 'avghash1hr', $script:avghash1hr )
+									$script:nanopoolLastUpdate = $runTime
+								}
+							}
+							catch {
+								log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
+							}
+						}
+					}
+					Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort # -Verbose
+				}
+			}
+
+			Function show-Coin-Info {
+				$t = $host.ui.RawUI.ForegroundColor
+				$host.ui.RawUI.ForegroundColor = "Green"
+				$coininfo = New-Object PSObject
+				$coininfo  | Add-Member -NotePropertyName 'Balance' -NotePropertyValue $script:balance
+				$coininfo  | Add-Member -NotePropertyName 'H/R' -NotePropertyValue $script:avghash1hr
+				$coininfo  | Add-Member -NotePropertyName 'BTC' -NotePropertyValue   $script:btcprice
+				$coininfo  | Add-Member -NotePropertyName $( $script:coin ) -NotePropertyValue  $script:coins
+				$coininfo  |
+				Add-Member -NotePropertyName "BTC per $coinStats" -NotePropertyValue $( $script:coins * $script:btcprice )
+				$coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue $script:dollars
+				$coininfo | Format-Table
+				$host.ui.RawUI.ForegroundColor = $t
+			}
+
+			Function check-Influx {
+				if ( $grafanaEnabled -eq 'True' ) {
+					$error.clear()
+					Import-Module "Influx" -ErrorAction SilentlyContinue
+					if ( $error ) {
+						$error.Clear()
+						Clear-Host
+						Write-Host "`n`n`n`n`n`n`n`n`n`n"
+						log-Write -logstring "You need Influx modules to write to Grafana, " -fore Red -Linefeed -notification 1
+						log-Write -logstring "https://github.com/markwragg/PowerShell-Influx" -Fore Yellow -Linefeed -notification 2
+						$a = new-object -comobject wscript.shell
+						$intAnswer = $a.popup( "Do you want to install these now ?", 10, "Install modules from https://github.com/markwragg/PowerShell-Influx",
+						                       4 + 32 )
+						If ( $intAnswer -eq 6 ) {
+							log-write -logstring "Installing https://github.com/markwragg/PowerShell-Influx" -fore yellow -notification 1
+							Install-Module Influx -Scope CurrentUser -ErrorAction Inquire
+						}
+					}
+
+					$error.Clear()
+					Import-Module "Influx" -ErrorAction SilentlyContinue
+					if ( $error ) {
+						$grafanaEnabled = 'False'
+						log-Write -logstring "Disabling Grafana for now" -fore Green  -Linefeed -notification 1
 					}
 				}
 			}
-			Else {
-				Clear-Host
-				log-Write -logstring 'Unknown failure starting STAK (Daemon failed to start?)' -fore red -notification 0
-				Pause-Then-Exit
+
+			Function nanopoolvars {
+				IF ( Test-Path -Path ("$STAKfolder\\pools.txt" ) ) {
+					Write-Verbose  'reading pools.txt'
+
+					$pool = (($script:ConnectedPool ) -Split ':' )[ 0 ]
+					$rawPoolData = Get-Content -Path ("$STAKfolder\\pools.txt" ) |
+					               Where-Object { ($_.Contains( $pool ) ) } |
+					               Out-String
+
+					$rawWalletData = Get-Content -Path ("$STAKfolder\\pools.txt" ) |
+					                 Where-Object { ($_.Contains( 'wallet_address' ) ) } |
+					                 Out-String
+
+					if ( $rawPoolData ) {
+						$pooldata = $rawPoolData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
+						            ConvertFrom-StringData
+						$walletdata = $rawWalletData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
+						              ConvertFrom-StringData
+
+						$wallet = $walletdata.'wallet_address'
+
+						try {
+							if ( $wallet -match '/' ) {
+								$miner, $null = $wallet.split( '/' )
+							}
+							if ( $miner -match '.' ) {
+								$script:adr, $script:worker = $miner.split( '.' )
+							}
+							else {
+								$script:adr = $miner
+							}
+							$coinzone, $script:provider, $null = $pool.split( '.' )
+							$script:coin, $null = $coinzone.split( '-' )
+						}
+						catch {
+							log-write -logstring "Error reading pools file, disabling nanopool" -fore red -notification 1
+							$script:enableNanopool = 'False'
+						}
+					}
+					else {
+						log-Write -logstring "Connected pool not found in pools.txt" -fore red -notification 2
+					}
+				}
 			}
-		}
 
-		function check-Process {
-			param ([ Parameter ( Mandatory ) ]
-			       $exe
-			)
-			try {
-				$prog = ($exe -split '\.', 2 )
-				$prog = $prog[ 0 ]
-
-				# get process
-				$app = Get-Process -Name $prog -ErrorAction SilentlyContinue
-				if ( $app ) {
-					return $true
+			function read-Pools-File {
+				if ( test-path -path $poolsfile ) {
+					try {
+						$poolData = (Get-Content -Path .\pools.json ) -notmatch "^#|^/"| Out-String
+						(ConvertFrom-Json $poolData ).psobject.properties |
+						ForEach-Object { $script:PoolsList[ $_.Name ] = $_.Value }
+						return $true
+					}
+					catch { return $false }
 				}
 				else {
 					return $false
 				}
 			}
-			catch {
-				return $false
-			}
-
-		}
-
-		function dead-Thread-Check {
-			param ([ Parameter ( Mandatory ) ]
-			       $threads
-			)
-			log-write -logstring "Dead thread check" -fore yellow -notification 1
-			$nullThreadsReturned = 0
-
-			foreach ( $thread in $threads ) {
-
-				if ( $thread[ 0 ] ) {
-					write-host "Thread ok $( $thread[ 0 ] )"
-				}
-				else {
-					write-host "null thread"
-					$nullThreadsReturned += 1
-				}
 
 
-			}
-
-			log-write -logstring "$nullThreadsReturned dead threads found" -fore yellow -notification 1
-			Start-Sleep -s 3
-			if ( $nullThreadsReturned -gt 0 ) {
-				log-write -logstring "Dead threads detected, Most likely going to need a reboot " -fore red -notification 1
-				kill-Process -STAKexe ($STAKexe )
-				$script:STAKisup = $false
-				if ( $ResetCardOnStartup -ne 'True' ) {
-					reset-VideoCard -Force $true
-				}
-				$script:currHash = 0
-				call-Self
-			}
-		}
-
-
-		function starting-Hash {
-			log-Write -logstring 'Waiting for hash rate to stabilize' -fore Yellow -notification 5
-			$ts = New-TimeSpan -Seconds $STAKstable
-			$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
-			$flag = $false
-			# Wait $STAKstable seconds for hash rate to stabilize
-			while ( ($elapsedTimer.Elapsed -lt $ts ) -And (-Not ($flag ) ) ) {
-				$currTestHash = 0
-				$data = $null
-				$total = $null
+			Function check-Profit-Stats {
+				Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]$coins,
+				       [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][ int ]$hr
+				)
+				$statsURL = "https://minecryptonight.net/api/rewards?hr=$hr&limit=0"
+				$uridata = $null
+				$path = "$ScriptDir\profit.json"
 				$data = @{ }
-				$total = @{ }
-				$rawdata = (Invoke-WebRequest -UseBasicParsing -Uri $script:Url -TimeoutSec 60 ) -replace '\\', '\\'
-				If ( $rawdata ) {
-					$data = $rawdata | ConvertFrom-Json
-					$rawtotal = ($data.hashrate ).total
-					$total = $rawtotal | ForEach-Object { $_ }
+				if ( $coins ) { $supportedCoins = $coins.ToUpper() }
+				$bestcoins = [ Ordered ]@{ }
 
-					$currTestHash = $total[ 0 ]
-					If ( ! $startTestHash ) {
-						$startTestHash = $currTestHash
-					}
-					If ( $script:STAKisup ) {
-						log-Write -logstring 'STAK was already running, Skipping wait time' -fore Green -notification 5
-						dead-Thread-Check ($data.hashrate ).threads
-						$flag = $true
-						BREAK
-					}
-
-					Clear-Host
-					If ( $currTestHash ) {
-						Write-host -fore Green "Current Hash Rate: $currTestHash H/s"
-					}
-					$timeDiff = (($elapsedTimer.Elapsed - $ts ).Seconds ) -replace '-'
-					Write-host -fore Green "Waiting $timeDiff seconds for hashrate to stabilize."
-					Write-host -fore Red 'Press CTRL-C to EXIT NOW'
-
-					$script:currHash = $currTestHash
-					if ( $currTestHash -gt 0 ) {
-						# Hashrate Per Thread
-						$rawthread = ($data.hashrate ).threads
-						$threads = @($rawthread | ForEach-Object { $_[ 0 ] })
-						$script:threadArray = $threads
-						grafana
-						If ( ($currTestHash -lt $minhashrate ) -and ($timeDiff -gt $minlowratecheck ) ) {
-							lowratecheck $minlowratecheck
-							$flag = $true
-						}
-					}
-				}
-				Start-Sleep -Seconds 1
-			}
-			$elapsedTimer.Stop()
-
-			If ( ! $currTestHash ) {
-				dead-Thread-Check ($data.hashrate ).threads
-				Clear-Host
-				log-Write -logstring 'Could not get hashrate... restarting in 3 seconds' -fore Red -notification 1
-				log-Write -logstring "API data from failure `n$rawdata" -fore red -notification 4
-				Start-Sleep -Seconds 3
-				call-Self
-			}
-			ElseIf ( $currTestHash -gt $startTestHash) {
-				$script:maxhash = $currTestHash
-			}
-			Else {
-				$script:maxhash = $startTestHash
-			}
-
-			$script:currHash = $currTestHash
-			$script:rTarget = ($script:maxhash - $script:hdiff )
-			log-Write -logstring "Starting Hashrate: $script:maxhash H/s	Drop Target Hashrate: $script:rTarget H/s" -fore Green -notification 1
-		}
-
-		function current-Hash {
-			If ( $script:rTarget -gt $minhashrate ) {
-				$minhashrate = $script:rTarget
-			}
-			clear-host
-			log-Write -logstring 'Hash monitoring has begun.' -fore Green -notification 3
-			$timer = 0
-			$runTime = 0
-			$flag = 'False'
-			DO {
-				refreshSTAK
-				refresh-Screen
-				grafana
-				Start-Sleep -Seconds $sleeptime
-				$timer = ($timer + $sleeptime )
-				$runTime = ($timer )
-			} while ($script:currHash -gt $minhashrate )
-
-			If ( $script:currHash -lt $minhashrate ) {
-				lowratecheck $minhashrate
-				refreshSTAK
-			}
-
-			If ( ($flag -eq 'True' ) -And ($script:currHash -lt $minhashrate ) ) {
-				$tFormat = get-RunTime -sec ($runTime )
-				log-Write -logstring "Restarting in 10 seconds after $tFormat - Hash rate dropped from $script:maxhash H/s to $script:currHash H/s" -fore Red -notification 1
-				Start-Sleep -Seconds 10
-				$script:STAKisup = $false
-				kill-Process -STAKexe ($STAKexe )
-				call-self
-			}
-		}
-
-		function lowratecheck {
-			Param ([ Parameter ( Mandatory ) ]
-			       [ int ]
-			       $ratetocheck
-			)
-			$tFormat = get-RunTime -sec ($runTime )
-			log-Write -logstring "Low hash rate check triggered: after $tFormat - Hash rate dropped from $script:maxhash H/s to $script:currHash H/s" -fore Red -notification 1
-			$flag = 'False'
-			Check-Network # Check we have internet access
-			refreshSTAK   # Re-check STAK, Check-Network can be infinate
-
-			$ts = New-TimeSpan -Seconds 60
-			$deadTimer = [ Diagnostics.Stopwatch ]::StartNew()
-			# Check if we are connected  to a pool
-			while ( ($script:UpTime -eq 0 ) -And ($deadTimer.Elapsed -lt $ts ) ) {
-				write-host -fore red "Conection died, Pausing for up to $ts Seconds for it too recover $( ($deadTimer.Elapsed ).Seconds )"
-				Start-Sleep -Seconds 1
-				refreshSTAK
-				$flag = 'True'
-			}
-			$deadTimer.stop()
-
-			if ( $script:currHash -gt $ratetocheck ) {
-				$flag = 'True'
-			}
-			$ts = New-TimeSpan -Seconds $script:retrytimer
-			$elapsedTimer = [ Diagnostics.Stopwatch ]::StartNew()
-
-			# Hashdrop testing loop
-			While ( (($elapsedTimer.Elapsed -lt $ts ).Seconds ) -and ($flag -eq 'False' ) ) {
-				clear-host
-				refreshSTAK
-				$countdown = (($elapsedTimer.Elapsed -le $ts ).Seconds ) -replace '-'
-				Write-host -fore Red "Hash rate $script:currHash H/s less than set minimum $ratetocheck H/s"
-				Write-host -fore Red "Waiting for $countdown seconds for it to recover"
-
-				if ( $script:currHash -gt $ratetocheck ) {
-					Write-Host -fore Green 'Above min hash rate'
-					$flag = 'True'
-					break
-				}
-				else {
-					Write-Host -fore Red 'Below min hash rate'
-				}
-				Start-Sleep -Seconds 1 # Itteration wait time
-			}
-
-			if ( $flag -eq 'False' ) {
-				log-Write -logstring "Restarting Script after $tFormat - Hash rate $script:currHash H/s less than set minimum $ratetocheck H/s" -fore red -notification 1
-				kill-Process -STAKexe ($STAKexe )
-				$script:STAKisup = $false
-				if ( (Supported-Cards-OK ) -and ($ResetCardOnStartup -ne 'True' ) ) {
-					reset-VideoCard -Force $true # Low rate triggered but driver ok, lets force a card reset and exit
-				}
-				$script:currHash = 0
-				call-Self
-			}
-			elseif ((($deadTimer.Elapsed ).seconds -gt 1 ) -and ($flag = 'True' )) {
-				log-Write -logstring "Temporary connection issue > 1s, Recovery time $( ($deadTimer.Elapsed ).seconds )"  -fore Red -notification 1
-			}
-			refreshSTAK
-		}
-
-		function kill-Process {
-			param ([ Parameter ( Mandatory ) ]
-			       $STAKexe
-			)
-			try {
-				$prog = ($STAKexe -split '\.', 2 )
-				$prog = $prog[ 0 ]
-				$failureMessage = "
-            Failed to kill the process $prog
-            If we don't stop here STAK would be invoked over and over until the PC crashed.
-          That would be very bad...."
-
-				# get STAK process
-				$stakPROC = Get-Process -Name $prog -ErrorAction SilentlyContinue
-				if ( $stakPROC ) {
-					# try gracefully first
-					$null = $stakPROC.CloseMainWindow()
-					# kill after five seconds
-					Start-Sleep -Seconds 5
-					if ( ! $stakPROC.HasExited ) {
-						$null = $stakPROC | Stop-Process -Force
-					}
-					if ( ! $stakPROC.HasExited ) {
-						Write-host -fore Red $failureMessage
-						log-Write -logstring "Failed to kill $prog" -fore 0 -notification 1
-						Pause-Then-Exit
-					}
-					Else {
-						log-Write -logstring 'STAK closed successfully' -fore Green -notification 5
-					}
-				}
-				Else {
-					log-Write -logstring "$prog process was not found" -Fore Green -notification 5
-				}
-			}
-			Catch {
-				Write-host -fore Red failureMessage
-				log-Write -logstring "Failed to kill $prog" -fore 0 -notification 0
-				Pause-Then-Exit
-			}
-		}
-
-		Function grafana {
-			if ( $grafanaEnabled -eq 'True' ) {
-				$Metrics = @{
-					Total_Hash_Rate = [ int ]$script:currHash
-					Difficulty = [ int ]$script:currDiff
-					Total_Shares = [ int ]$script:TotalShares
-					Good_Shares = [ int ]$script:GoodShares
-					Average_time = [ int ]$script:TimeShares
-				}
-
-				# Add in per thread hashrate
-				if ( $script:threadArray[ 0 ] ) {
-					$script:threadArray | ForEach-Object -Begin { $seq = 0 } -Process {
-						$key = "Thread_$seq"
-						$Metrics.add( $key, $script:threadArray[ $seq ] )
-						$seq++
-					}
-				}
-
-
-				if ( $script:lastRoomTemp ) {
-					if ( $true) #$script:timeDrift -gt ($sleeptime + 60 ) )
-					 {
-						$t = [Decimal]($script:lastRoomTemp ).OuterTemp
-						$Metrics.add( "Room_Temp_float", $t )
-					}
-				}
-
-
-				if ( $script:enableNanopool -eq 'True' ) {
-					if ( ($runTime - $script:nanopoolLastUpdate ) -ge 1 ) {
-
-						try {
-							nanopoolvars
-							if ( $script:provider -ne 'nanopool' ) {
-								log-write -logstring "Not using Nanopool, you are using $script:provider, disabling stats" -fore red -notification 1
-								$script:enableNanopool = 'False'
-							}
-							else {
-								[ Decimal ]$script:balance = [ math ]::Round( (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,
-								                                              4 )
-								[ Decimal ]$script:btcprice = [ Double ]((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
-								[ int ]$script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker ).data.'h1'
-
-								$profitData = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash ).data
-								[ decimal ]$script:coins = [ math ]::Round( $profitData.$coinStats.'coins', 8 )
-								[ decimal ]$script:dollars = [ math ]::Round( $profitData.$coinStats.'dollars', 4 )
-
-								$Metrics.add( 'balance', $script:balance )
-								$Metrics.add( 'btcprice', $script:btcprice )
-								$Metrics.add( "estCoin$coinStats", $script:coins )
-								$Metrics.add( "estDollar$coinStats", $script:dollars )
-								$Metrics.add( 'avghash1hr', $script:avghash1hr )
-								$script:nanopoolLastUpdate = $runTime
-							}
-						}
-						catch {
-							log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
-							write-output $Error
-						}
-					}
-				}
-				Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort # -Verbose
-			}
-		}
-
-		Function show-Coin-Info {
-			$t = $host.ui.RawUI.ForegroundColor
-			$host.ui.RawUI.ForegroundColor = "Green"
-			$coininfo = New-Object PSObject
-			$coininfo  | Add-Member -NotePropertyName 'Balance' -NotePropertyValue $script:balance
-			$coininfo  | Add-Member -NotePropertyName 'H/R' -NotePropertyValue $script:avghash1hr
-			$coininfo  | Add-Member -NotePropertyName 'BTC' -NotePropertyValue   $script:btcprice
-			$coininfo  | Add-Member -NotePropertyName $( $script:coin ) -NotePropertyValue  $script:coins
-			$coininfo  |
-			Add-Member -NotePropertyName "BTC per $coinStats" -NotePropertyValue $( $script:coins * $script:btcprice )
-			$coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue $script:dollars
-			$coininfo | Format-Table
-			$host.ui.RawUI.ForegroundColor = $t
-		}
-
-		Function check-Influx {
-			if ( $grafanaEnabled -eq 'True' ) {
-				$error.clear()
-				Import-Module "Influx" -ErrorAction SilentlyContinue
-				if ( $error ) {
-					$error.Clear()
-					Clear-Host
-					Write-Host "`n`n`n`n`n`n`n`n`n`n"
-					log-Write -logstring "You need Influx modules to write to Grafana, " -fore Red -Linefeed -notification 1
-					log-Write -logstring "https://github.com/markwragg/PowerShell-Influx" -Fore Yellow -Linefeed -notification 2
-					$a = new-object -comobject wscript.shell
-					$intAnswer = $a.popup( "Do you want to install these now ?", 10,
-					                       "Install modules from https://github.com/markwragg/PowerShell-Influx",
-					                       4 + 32 )
-					If ( $intAnswer -eq 6 ) {
-						log-write -logstring "Installing https://github.com/markwragg/PowerShell-Influx" -fore yellow -notification 1
-						Install-Module Influx -Scope CurrentUser -ErrorAction Inquire
-					}
-				}
-
-				$error.Clear()
-				Import-Module "Influx" -ErrorAction SilentlyContinue
-				if ( $error ) {
-					$grafanaEnabled = 'False'
-					log-Write -logstring "Disabling Grafana for now" -fore Green  -Linefeed -notification 1
-				}
-			}
-		}
-
-		Function nanopoolvars {
-			IF ( Test-Path -Path ("$STAKfolder\\pools.txt" ) ) {
-				Write-Verbose  'reading pools.txt'
-
-				$pool = (($script:ConnectedPool ) -Split ':' )[ 0 ]
-				$rawPoolData = Get-Content -Path ("$STAKfolder\\pools.txt" ) |
-				               Where-Object { ($_.Contains( $pool ) ) } |
-				               Out-String
-
-				$rawWalletData = Get-Content -Path ("$STAKfolder\\pools.txt" ) |
-				                 Where-Object { ($_.Contains( 'wallet_address' ) ) } |
-				                 Out-String
-
-				if ( $rawPoolData ) {
-					$pooldata = $rawPoolData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
-					            ConvertFrom-StringData
-					$walletdata = $rawWalletData -replace '\{' -replace '\},' -replace '"' -replace ':', '=' -replace ',', "`n" |
-					              ConvertFrom-StringData
-
-					$wallet = $walletdata.'wallet_address'
-
+				function get-stats {
 					try {
-						if ( $wallet -match '/' ) {
-							$miner, $null = $wallet.split( '/' )
-						}
-						if ( $miner -match '.' ) {
-							$script:adr, $script:worker = $miner.split( '.' )
-						}
-						else {
-							$script:adr = $miner
-						}
-						$coinzone, $script:provider, $null = $pool.split( '.' )
-						$script:coin, $null = $coinzone.split( '-' )
+						$uridata = Invoke-WebRequest -UseBasicParsing -Uri $statsURL -TimeoutSec 60
+						$uridata | Set-Content -Path $path
 					}
 					catch {
-						log-write -logstring "Error reading pools file, disabling nanopool" -fore red -notification 1
-						$script:enableNanopool = 'False'
+						log-write -logstring "Issue updating profit stats, Using last set" -for red -notification 2
 					}
 				}
-				else {
-					log-Write -logstring "Connected pool not found in pools.txt" -fore red -notification 2
-				}
-			}
-		}
 
-		function read-Pools-File {
-			if ( test-path -path $poolsfile ) {
-				try {
-					$poolData = (Get-Content -Path .\pools.json ) -notmatch "^#|^/"| Out-String
-					(ConvertFrom-Json $poolData ).psobject.properties |
-					ForEach-Object { $script:PoolsList[ $_.Name ] = $_.Value }
-					return $true
-				}
-				catch { return $false }
-			}
-			else {
-				return $false
-			}
-		}
-
-
-		Function check-Profit-Stats {
-			Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]$coins,
-			       [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][ int ]$hr
-			)
-			$statsURL = "https://minecryptonight.net/api/rewards?hr=$hr&limit=0"
-			$uridata = $null
-			$path = "$ScriptDir\profit.json"
-			$data = @{ }
-			if ( $coins ) { $supportedCoins = $coins.ToUpper() }
-			$bestcoins = [ Ordered ]@{ }
-
-			function get-stats {
-				try {
-					$uridata = Invoke-WebRequest -UseBasicParsing -Uri $statsURL -TimeoutSec 60
-					$uridata | Set-Content -Path $path
-				}
-				catch {
-					log-write -logstring "Issue updating profit stats, Using last set" -for red -notification 2
-				}
-			}
-
-			# Refresh stats file
-			if ( ! (Test-Path -path $path ) ) {
-				get-stats
-			}
-			else {
-				$test = Get-Item $path |
-				        Where-Object{ $_.LastWriteTime -lt (Get-Date ).AddSeconds( - $proftStatRefreshTime ) }
-				if ( $test ) {
+				# Refresh stats file
+				if ( ! (Test-Path -path $path ) ) {
 					get-stats
-					write-host "Profit stats refreshed from https://minecryptonight.net/api/rewards "
-				}
-			}
-
-			#Read from profit.json
-			$rawdata = (Get-Content -RAW -Path $path | Out-String | ConvertFrom-Json )
-
-			#Add each coin to an ordered list, Storing each coin's name as the value so item 0 is always best coin
-			foreach ( $coin in $rawdata.rewards ) {
-				#write-host $coin.ticker_symbol $coin.reward_24h.btc
-				if ( ($coin.ticker_symbol ) |Where-Object ({ $_ -in $supportedCoins } ) ) {
-					$script:pools.Add( [ Decimal ]$coin.reward_24h.btc, $coin.ticker_symbol )
 				}
 				else {
-					$bestcoins.Add( [ Decimal ]$coin.reward_24h.btc, $coin.ticker_symbol )
-				}
-			}
-
-			#Check our pools
-			if ( $script:pools ) {
-
-				log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
-				log-write -logstring "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow -notification 2
-				log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 3
-				$bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
-				$ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
-				$profitLoss = $bestcoin - $ourcoin
-
-				# Export coin to mine to script
-				$script:coinToMine = $script:pools[ 0 ]
-
-				log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 1
-			}
-			else {
-				log-write -logstring "No compatable entries found in $ScriptDir\pools.txt"
-			}
-		}
-
-
-		function get-coin-specific-parameters {
-			$poolfile = @{ }
-			$settings = @{ }
-			$rawobj = $script:PoolsList.($script:coinToMine )
-			$rawobj.psobject.properties | ForEach-Object { $poolfile[ $_.Name ] = $_.Value }
-			if ( $rawobj.settings ) {
-				$rawobj.settings.psobject.properties | ForEach-Object { $settings[ $_.Name ] = $_.Value }
-
-				log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2 -linefeed
-				if ( $settings.hdiff ) {
-					$script:hdiff = ($settings ).hdiff
+					$test = Get-Item $path |
+					        Where-Object{ $_.LastWriteTime -lt (Get-Date ).AddSeconds( - $proftStatRefreshTime ) }
+					if ( $test ) {
+						get-stats
+						write-host "Profit stats refreshed from https://minecryptonight.net/api/rewards "
+					}
 				}
 
-				if ( $settings.tools ) {
-					$script:vidToolArray = $settings.tools
-				}
+				#Read from profit.json
+				$rawdata = (Get-Content -RAW -Path $path | Out-String | ConvertFrom-Json )
 
-				if ( $settings.minhashrate ) {
-					$script:minhashrate = ($settings ).minhashrate
-				}
-
-				$out = "Settings found"
-				$out += "`n hdiff = $script:hdiff"
-				foreach ( $item in $script:vidToolArray ) {
-					$out += "`n $item"
-				}
-				$out += "`n minhashrate = $script:minhashrate"
-				$out += "`n $( $script:amd )"
-				$out += "`n $( $script:nvidia )"
-				$out += "`n $( $script:cpu )"
-				log-write -logstring $out -fore white -notification 3 -linefeed
-
-				if ( $settings.amd ) {
-					$defaultamd = 'default_amd.txt'
-					$script:amd = ($settings ).amd
-					if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:amd" ) {
-						try {
-
-							copy-item ("$ScriptDir\$script:STAKfolder\$script:amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" )
-
-						}
-						catch {
-							log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
-						}
+				#Add each coin to an ordered list, Storing each coin's name as the value so item 0 is always best coin
+				foreach ( $coin in $rawdata.rewards ) {
+					#write-host $coin.ticker_symbol $coin.reward_24h.btc
+					if ( ($coin.ticker_symbol ) |Where-Object ({ $_ -in $supportedCoins } ) ) {
+						$script:pools.Add( [ Decimal ]$coin.reward_24h.btc, $coin.ticker_symbol )
 					}
 					else {
-						log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:amd" ) loading defaults "-fore Red -notification 3 -linefeed
-
-						if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultamd" ) {
-							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultamd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" ) -force )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultamd" )" -fore white -notification 3
-						}
-						else {
-							log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultamd" ) you need this file to fall back too, can be empty"  -fore red -notification 3
-							Pause-Then-Exit
-						}
+						$bestcoins.Add( [ Decimal ]$coin.reward_24h.btc, $coin.ticker_symbol )
 					}
 				}
 
-				if ( $settings.nvidia ) {
-					$defaultnv = 'default_nvidia.txt'
-					$script:nvidia = ($settings ).nvidia
-					if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:nvidia" ) {
-						try {
-							copy-item ("$ScriptDir\$script:STAKfolder\$script:nvidia" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore white -notification 3
+				#Check our pools
+				if ( $script:pools ) {
 
-						}
-						catch {
-							log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore red -notification 3
-						}
-					}
-					else {
-						log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:nvidia" ) loading defaults "-fore Red -notification 3 -linefeed
-						if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultnv" ) {
-							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultnv" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" ) -force )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultnv" )" -fore white -notification 3
-						}
-						else {
-							log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultnv" ) you need this file to fall back too, can be empty"  -fore red -notification 3
-							Pause-Then-Exit
-						}
-					}
+					log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
+					log-write -logstring "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow -notification 2
+					log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 3
+					$bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
+					$ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
+					$profitLoss = $bestcoin - $ourcoin
+
+					# Export coin to mine to script
+					$script:coinToMine = $script:pools[ 0 ]
+
+					log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 1
 				}
+				else {
+					log-write -logstring "No compatable entries found in $ScriptDir\pools.txt"
+				}
+			}
 
-				if ( $settings.cpu ) {
-					$defaultcpu = 'default_cpu.txt'
-					$script:cpu = ($settings ).cpu
-					if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:cpu" ) {
-						try {
-							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$script:cpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore white -notification 3
-						}
-						catch {
-							log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore red -notification 3
-						}
+
+			function get-coin-specific-parameters {
+				$poolfile = @{ }
+				$settings = @{ }
+				$rawobj = $script:PoolsList.($script:coinToMine )
+				$rawobj.psobject.properties | ForEach-Object { $poolfile[ $_.Name ] = $_.Value }
+				if ( $rawobj.settings ) {
+					$rawobj.settings.psobject.properties | ForEach-Object { $settings[ $_.Name ] = $_.Value }
+
+					log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2 -linefeed
+					if ( $settings.hdiff ) {
+						$script:hdiff = ($settings ).hdiff
 					}
-					else {
-						log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:cpu" ) loading defaults  " -fore Red -notification 3 -linefeed
-						if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultcpu" ) {
-							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultcpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) -force )
-							log-write -logstring "Copying  $( "$ScriptDir\$script:STAKfolder" )\$defaultcpu " -fore white -notification 3
+
+					if ( $settings.tools ) {
+						$script:vidToolArray = $settings.tools
+					}
+
+					if ( $settings.minhashrate ) {
+						$script:minhashrate = ($settings ).minhashrate
+					}
+
+					$out = "Settings found"
+					$out += "`n hdiff = $script:hdiff"
+					foreach ( $item in $script:vidToolArray ) {
+						$out += "`n $item"
+					}
+					$out += "`n minhashrate = $script:minhashrate"
+					$out += "`n $( $script:amd )"
+					$out += "`n $( $script:nvidia )"
+					$out += "`n $( $script:cpu )"
+					log-write -logstring $out -fore white -notification 3 -linefeed
+
+					if ( $settings.amd ) {
+						$defaultamd = 'default_amd.txt'
+						$script:amd = ($settings ).amd
+						if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:amd" ) {
+							try {
+
+								copy-item ("$ScriptDir\$script:STAKfolder\$script:amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" )
+
+							}
+							catch {
+								log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
+							}
 						}
 						else {
-							log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultcpu" ) you need this file to fall back too, can be empty"  -fore red -notification 3
-							Pause-Then-Exit
+							log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:amd" ) loading defaults "-fore Red -notification 3 -linefeed
+
+							if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultamd" ) {
+								$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultamd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" ) -force )
+								log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultamd" )" -fore white -notification 3
+							}
+							else {
+								log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultamd" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+								Pause-Then-Exit
+							}
+						}
+					}
+
+					if ( $settings.nvidia ) {
+						$defaultnv = 'default_nvidia.txt'
+						$script:nvidia = ($settings ).nvidia
+						if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:nvidia" ) {
+							try {
+								copy-item ("$ScriptDir\$script:STAKfolder\$script:nvidia" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" )
+								log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore white -notification 3
+
+							}
+							catch {
+								log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore red -notification 3
+							}
+						}
+						else {
+							log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:nvidia" ) loading defaults "-fore Red -notification 3 -linefeed
+							if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultnv" ) {
+								$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultnv" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" ) -force )
+								log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultnv" )" -fore white -notification 3
+							}
+							else {
+								log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultnv" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+								Pause-Then-Exit
+							}
+						}
+					}
+
+					if ( $settings.cpu ) {
+						$defaultcpu = 'default_cpu.txt'
+						$script:cpu = ($settings ).cpu
+						if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:cpu" ) {
+							try {
+								$null = (copy-item ("$ScriptDir\$script:STAKfolder\$script:cpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) )
+								log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore white -notification 3
+							}
+							catch {
+								log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore red -notification 3
+							}
+						}
+						else {
+							log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:cpu" ) loading defaults  " -fore Red -notification 3 -linefeed
+							if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultcpu" ) {
+								$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultcpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) -force )
+								log-write -logstring "Copying  $( "$ScriptDir\$script:STAKfolder" )\$defaultcpu " -fore white -notification 3
+							}
+							else {
+								log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultcpu" ) you need this file to fall back too, can be empty"  -fore red -notification 3
+								Pause-Then-Exit
+							}
 						}
 					}
 				}
 			}
-		}
 
-		function write-xmrstak-Pools-File {
+			function write-xmrstak-Pools-File {
 
 
-			function Select-Address {
-				param
-				([ Parameter ( Mandatory = $true, ValueFromPipeline = $true, HelpMessage = "Data to process" ) ]
-				 $InputObject
-				)
-				process
-				{
-					$pool[ $InputObject.Name ] = $InputObject.Value
+				function Select-Address {
+					param
+					([ Parameter ( Mandatory = $true, ValueFromPipeline = $true, HelpMessage = "Data to process" ) ]
+					 $InputObject
+					)
+					process
+					{
+						$pool[ $InputObject.Name ] = $InputObject.Value
+					}
 				}
-			}
 
-			$script:poolsdottextContent = '"pool_list" : [' + "`n"
+				$script:poolsdottextContent = '"pool_list" : [' + "`n"
 
-			$poolfile = @{ }
-			$pool = @{ }
-			$rawobj = $script:PoolsList.($script:coinToMine )
-			$rawobj.psobject.properties | ForEach-Object { $poolfile[ $_.Name ] = $_.Value }
-			$rawobj.address.psobject.properties | Select-Address
+				$poolfile = @{ }
+				$pool = @{ }
+				$rawobj = $script:PoolsList.($script:coinToMine )
+				$rawobj.psobject.properties | ForEach-Object { $poolfile[ $_.Name ] = $_.Value }
+				$rawobj.address.psobject.properties | Select-Address
 
-			$footer = '],
+				$footer = '],
             "currency" : "' + $( $poolfile.algorithm ) + '",
             '
-			function write-entry {
-				Param ([ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][ string ]$key,
-				       [ Parameter ( Position = 2, Mandatory, ValueFromPipeline ) ][ string ]$value
-				)
-				$r = $poolfile.Clone()
-				$r.add( "pool_address", $key )
-				$r.add( "pool_weight", [ int ]$value )
-				$r.Remove( "address" )
-				$r.Remove( "algorithm" )
-				$r.Remove( "settings" )
-				$r.Remove( "amd_txt" )
-				$r.Remove( "nvidia_txt" )
-				$r.Remove( "cpu_txt" )
-				$l = $r | ConvertTo-Json
-				$script:poolsdottextContent += ($l + ",`n" )
-			}
+				function write-entry {
+					Param ([ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][ string ]$key,
+					       [ Parameter ( Position = 2, Mandatory, ValueFromPipeline ) ][ string ]$value
+					)
+					$r = $poolfile.Clone()
+					$r.add( "pool_address", $key )
+					$r.add( "pool_weight", [ int ]$value )
+					$r.Remove( "address" )
+					$r.Remove( "algorithm" )
+					$r.Remove( "settings" )
+					$r.Remove( "amd_txt" )
+					$r.Remove( "nvidia_txt" )
+					$r.Remove( "cpu_txt" )
+					$l = $r | ConvertTo-Json
+					$script:poolsdottextContent += ($l + ",`n" )
+				}
 
 
-			if ( test-path -path "$ScriptDir\$STAKfolder" ) {
-				try {
-					log-write -logstring "Writing $STAKfolder\$poolsdottext" -fore green -notification 1
-					foreach ( $p in ($pool ).keys ) {
-						write-entry $p $pool.$p
+				if ( test-path -path "$ScriptDir\$STAKfolder" ) {
+					try {
+						log-write -logstring "Writing $STAKfolder\$poolsdottext" -fore green -notification 1
+						foreach ( $p in ($pool ).keys ) {
+							write-entry $p $pool.$p
+						}
+						$script:poolsdottextContent += $footer
+						$script:poolsdottextContent | Set-Content -Path "$ScriptDir\$STAKfolder\$poolsdottext"
+
 					}
-					$script:poolsdottextContent += $footer
-					$script:poolsdottextContent | Set-Content -Path "$ScriptDir\$STAKfolder\$poolsdottext"
+					catch {
+						log-write -logstring "Error Writing $STAKfolder\$poolsdottext" -fore red -notification 1
+						Pause-Then-Exit
 
+					}
 				}
-				catch {
-					log-write -logstring "Error Writing $STAKfolder\$poolsdottext" -fore red -notification 1
-					Pause-Then-Exit
-
+				else {
+					return $false
 				}
-			}
-			else {
-				return $false
+
 			}
 
-		}
 
 
 
 
-
-		##### END FUNCTIONS #####
-
-
-		##### MAIN - or The Fun Starts Here #####
-		do {
-
-			$ProgressPreference = 'SilentlyContinue' # Disable web request progress bar
-			#$ErrorActionPreference='Continue' # Keep going
-			# Relaunch if not admin
-			Invoke-RequireAdmin -MyInvocation $script:MyInvocation
-
-			# Display key settings
-			if ( $initalRun ) {
-				log-Write -logstring "Starting the Hash Monitor Script... $ver "-fore White -linefeed  -notification 1
-				$initalRun = $false
-			}
-			Else {
-				log-Write -logstring '== Loop Started ==' -fore Green -notification 5
-			}
-
-			Log-Write -logstring "Reboot enabled: $rebootEnabled" -fore 'White' -notification 2
-			Log-Write -logstring "Reset Cards enabled: $CardResetEnabled" -fore 'White' -notification 2
-			Start-Sleep -Seconds 2
-
-			Resize-Console
-
-			check-Influx
-
-			Check-Network
-
-			quickcheckSTAK  ($script:Url )  # check and start stak if not running
-
-			chk-STAK  ($script:Url )        # Wait for STAK to return a hash rate
-
-			starting-Hash                  # Get the starting hash rate
-
-			current-Hash                   # Gather the current hash rate every $sleeptime seconds until it drops beneath the threshold
+			##### END FUNCTIONS #####
 
 
-			log-Write -logstring 'Repeat Loop' -fore red -notification 4
+			##### MAIN - or The Fun Starts Here #####
+			do {
+				debug-Check
+				$ProgressPreference = 'SilentlyContinue' # Disable web request progress bar
+				#$ErrorActionPreference='Continue' # Keep going
+				# Relaunch if not admin
+				Invoke-RequireAdmin -MyInvocation $script:MyInvocation
+
+				# Display key settings
+				if ( $initalRun ) {
+					log-Write -logstring "Starting the Hash Monitor Script... $ver "-fore White -linefeed  -notification 1
+					$initalRun = $false
+				}
+				Else {
+					log-Write -logstring '== Loop Started ==' -fore Green -notification 5
+				}
+
+				Log-Write -logstring "Reboot enabled: $rebootEnabled" -fore 'White' -notification 2
+				Log-Write -logstring "Reset Cards enabled: $CardResetEnabled" -fore 'White' -notification 2
+				Start-Sleep -Seconds 2
+
+				Resize-Console
+
+				check-Influx
+
+				Check-Network
 
 
 
-			# End of mining loop
-		} while ($running -eq $true) # Keep running until restart triggered, triggered in call-Self
+				quickcheckSTAK  ($script:Url )  # check and start stak if not running
 
-		# Setup for next run
-		log-write -logstring "Restart triggered`n`n" -fore Red -notification 1
-		$running = $true
+				chk-STAK  ($script:Url )        # Wait for STAK to return a hash rate
 
-	} while ($active -eq $true) # Used to exit script from anywhwere in code, ignored in fatal driver error
+				starting-Hash                  # Get the starting hash rate
 
-} # End of Run-Miner Function
+				current-Hash                   # Gather the current hash rate every $sleeptime seconds until it drops beneath the threshold
+
+
+				log-Write -logstring 'Repeat Loop' -fore red -notification 4
+
+
+
+				# End of mining loop
+			} while ($running -eq $true) # Keep running until restart triggered, triggered in call-Self
+
+			# Setup for next run
+			log-write -logstring "Restart triggered`n`n" -fore Red -notification 1
+			$running = $true
+
+		} while ( $active -eq $true ) # Used to exit script from anywhwere in code, ignored in fatal driver error
+
+	} # End of Run-Miner Function
 
 # Runtime Variables
 $active = $true
