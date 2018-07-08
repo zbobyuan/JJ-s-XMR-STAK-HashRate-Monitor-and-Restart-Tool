@@ -618,7 +618,6 @@ Function Run-Miner {
 		# Check if profitSwitching is enabled
 		if ( $inifilevalues.sensorDataFile ) {
 			$sensorDataFile = ($inifilevalues.sensorDataFile) -replace '//','/'
-
 		}
 
 		# Check if killStakOnMaxTemp is enabled
