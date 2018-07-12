@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.3.7'
+		$ver = '4.3.8'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
@@ -1559,11 +1559,9 @@ Function Run-Miner {
 			}
 
 			Function test-cards {
-				[ int ]
-				$boardCount, $null = (clinfo.exe  | sls  "Board Name" -ErrorAction SilentlyContinue |
-				                      sls -n "n/a" ).count
+				$boardCount, $null = (clinfo.exe  | sls  "Board Name" -ErrorAction SilentlyContinue | sls -n "n/a" ).count
 				if ( $boardCount -ge 1 ) {
-					[ int ]$boardActual = $boardCount - 1
+					$boardActual = $boardCount - 1
 					log-write -logstring "Device count $boardActual" -fore red -notification 1
 					$deviceinfodebug = (clinfo.exe | sls  "Board Name" ) -replace 'Board Name:'
 					if ( $deviceinfodebug ) {

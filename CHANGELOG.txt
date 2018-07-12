@@ -1,3 +1,11 @@
+Version 4.3.8
+Release Date 2018-07-12
+
+Changes
+    Amended typecast error when displaying board count
+    added temperature monitoring using TEMPerX1 usb sensor, includes max temp with ability to stop mining
+
+
 Version 4.3.5
 Release Date 2018-07-07
 
