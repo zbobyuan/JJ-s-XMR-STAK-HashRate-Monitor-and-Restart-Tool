@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.3.8'
+		$ver = '4.3.9'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
@@ -1569,8 +1569,10 @@ Function Run-Miner {
 					}
 					if ( $boardActual -lt $installedCards ) {
 						log-write -logstring "Cards seen $boardActual is less than installedCards setting of $installedCards" -fore red -notification 1
-						Reboot-If-Enabled
+						reset-VideoCard -force $true
 					}
+					$boardCount, $null = (clinfo.exe  | sls  "Board Name" -ErrorAction SilentlyContinue | sls -n "n/a" ).count
+					$boardActual = $boardCount - 1
 					if ( $boardActual -gt $installedCards ) {
 						$installedCards = $boardActual
 					}
