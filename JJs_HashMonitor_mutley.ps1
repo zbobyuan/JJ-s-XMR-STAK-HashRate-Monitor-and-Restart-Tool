@@ -2035,7 +2035,8 @@ Function Run-Miner {
 							try {
 								nanopoolvars
 								if ( $script:provider -ne 'nanopool' ) {
-									log-write -logstring "Not using Nanopool, you are using $script:provider, disabling stats" -fore red -notification 1
+									$pool, $diff = $script:ConnectedPool.split(':')
+									log-write -logstring "Not using Nanopool, you are using $pool, disabling stats" -fore red -notification 1
 									$script:enableNanopool = 'False'
 								}
 								else {
