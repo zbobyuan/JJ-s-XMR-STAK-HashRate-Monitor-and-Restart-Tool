@@ -1236,6 +1236,7 @@ Function Run-Miner {
 					} else {
 						write-verbose "Invalid Reading, Too much time drift $script:timeDrift "
 						$script:validSensorTime = 'False'
+						$script:lastRoomTemp = $null
 						write-verbose "get-room-temps: Time Drift in minutes $script:timeDrift"
 					}
 
@@ -1993,7 +1994,7 @@ Function Run-Miner {
 				}
 
 
-				if ( $script:lastRoomTemp ) {
+				if (( $script:lastRoomTemp ) -and ($script:validSensorTime -eq 'True')) {
 					$t = [Decimal] ($script:lastRoomTemp ).OuterTemp
 					$Metrics.add( "Room_Temp_float", $t )
 
