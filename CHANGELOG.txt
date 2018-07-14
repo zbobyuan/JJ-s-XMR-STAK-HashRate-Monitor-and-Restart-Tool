@@ -1,3 +1,16 @@
+Version 4.3.10
+Release Date 2018-07-13
+
+Changes
+    Added stop option to reset gpu logic to disable drivers only, used in over temp situation
+    Fixed issue where minhashrate was not being honoured when profitswitching enabled
+    Added options to ini file
+        TempWatch           enable temp monitoring logic, default false
+        sensorDataFile      full path  to csv file created by TEMPer usb sensor
+        TEMPerMaxTemp       Max temp allowed
+        killStakOnMaxTemp   set to true to kill XMR-STAK and disable GPU's if over max temp, will resume when temp below max
+
+
 Version 4.3.9
 Release Date 2018-07-13
 
