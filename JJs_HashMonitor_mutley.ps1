@@ -1060,7 +1060,7 @@ Function Run-Miner {
 
 			if ( ( $CardResetEnabled -eq 'True' ) -and ($stop ) ) {
 				log-Write -logstring "Card stop called" -fore Red -notification 1
-				foreach ( $dev in $d ) {
+				foreach ( $dev in $allCards ) {
 					$vCTR = $vCTR + 1
 					log-Write -logstring "Disabling $dev" -fore Red -notification 5
 					$disableTimer = [ Diagnostics.Stopwatch ]::StartNew()
@@ -1997,7 +1997,6 @@ Function Run-Miner {
 				if (( $script:lastRoomTemp ) -and ($script:validSensorTime -eq 'True')) {
 					$t = [Decimal] ($script:lastRoomTemp ).OuterTemp
 					$Metrics.add( "Room_Temp_float", $t )
-
 				}
 
 
