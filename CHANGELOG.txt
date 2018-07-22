@@ -1,11 +1,19 @@
+Version 4.3.12
+Release Date 2018-07-13
+
+Changes
+    Added additional reboot logic if installed cards less than set value after additional reset
+    Added truncate sensorfile to startup logic to keep file small
+    Adjusted some alert settings to reduce logging sent to slack at lower notification levels
+
 Version 4.3.11
 Release Date 2018-07-13
 
 Changes
     Bugfix: not all cards were stopping when max temp was reached
-    Bugfix: was bcontinuing to send temp readings after timedrift exceeded
+    Bugfix: was continuing to send temp readings after timedrift exceeded
 
-    
+
 Version 4.3.10
 Release Date 2018-07-13
 

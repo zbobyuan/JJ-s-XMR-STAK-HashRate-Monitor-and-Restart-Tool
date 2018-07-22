@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.3.10'
+		$ver = '4.3.12'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
@@ -189,10 +189,10 @@ Function Run-Miner {
         # 1 -> 5 Increasing verbosity
         alertLevel = 1
 
-        # How long topause between device resets
+        # How long to pause between device resets
         devwait = 3
 
-        # If a device btakes lkonger than this to disabl;e its concidered in error and a reboot is called
+        # If a device takes longer than this to disable its concidered in error and a reboot is called
         maxDeviceResetTime = 3
 
         # expectedCards, How many cards should the script see if everythings OK, Do not exceed actual card count
@@ -811,6 +811,7 @@ Function Run-Miner {
 					$data = $null
 					$null = $null
 					$data = @{ }
+					$error.Clear()
 					$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $url/$coin/$stat -TimeoutSec 60
 					$null = 'True'
 					Write-Verbose -Message ("{0}`t Nanopool API call  `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata ) #-verbose
@@ -819,6 +820,7 @@ Function Run-Miner {
 
 					Write-Verbose -Message ("{0}`t Nanopool issue with API call `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata ) #-Verbose
 					$null = 'False'
+					Write-Verbose -Message $error
 				}
 			}
 
@@ -971,7 +973,7 @@ Function Run-Miner {
 							log-write -logstring "Room temp $lt c, max temp is set at $TEMPerMaxTemp c last reading taken $lti" -fore yellow -notification 1
 
 						} else {
-							log-write -logstring "Room temp ok $lt c" -fore green -notification 1
+							log-write -logstring "Room temp ok $lt c" -fore green -notification 2
 						}
 
 						start-sleep -s $infoMessageTime
@@ -1221,6 +1223,10 @@ Function Run-Miner {
 				if ( test-path -path $sensorDataFile ) {
 					$script:sensorData = 'True'
 					write-verbose "get-room-temps: Sensorfile exists $sensorDataFile"
+					if ( $truncateSensorFile -eq 'True' ) {
+						truncate-sensorfile
+						$truncateSensorFile = 'False'
+					}
 					$script:lastRoomTemp = (get-content -path $sensorDataFile ) -replace ('â|„|ƒ' ) |
 					                       out-string |
 					                       ConvertFrom-Csv |
@@ -1239,13 +1245,13 @@ Function Run-Miner {
 						$script:lastRoomTemp = $null
 						write-verbose "get-room-temps: Time Drift in minutes $script:timeDrift"
 					}
-
 				}
 			}
 		}
 
 
-		##################################
+
+	##################################
 		Function refresh-Screen {
 			$tmRunTime = get-RunTime -sec ($runTime )
 			$tpUpTime = get-RunTime -sec ($script:UpTime )
@@ -1548,7 +1554,7 @@ Function Run-Miner {
 			                      sls -n "n/a" ).count
 			if ( $boardCount -ge 1 ) {
 				$boardActual = $boardCount - 1
-				log-write -logstring "Device count $boardActual" -fore red -notification 1
+				log-write -logstring "CL devices found $boardActual" -fore red -notification 1
 				$deviceinfodebug = (clinfo.exe | sls  "Board Name" ) -replace 'Board Name:'
 				if ( $deviceinfodebug ) {
 					log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red -notification 3
@@ -1562,6 +1568,10 @@ Function Run-Miner {
 				$boardActual = $boardCount - 1
 				if ( $boardActual -gt $installedCards ) {
 					$installedCards = $boardActual
+				} elseif ($boardActual -lt $installedCards) {
+					log-write -logstring "Cards seen after reset $boardActual is still less than installedCards setting of $installedCards" -fore red -notification 1
+					start-sleep -s 10
+					Reboot-If-Enabled
 				}
 			}
 			$test = (Supported-Cards-OK )
@@ -1619,6 +1629,7 @@ Function Run-Miner {
 					$script:STAKisup = $false
 				}
 			} While (($elapsedTimer.Elapsed -lt $ts ) -And ($flag -eq 'False' ))
+			write-host "`n"
 			$elapsedTimer.Stop()
 			check-room-temps
 			If ( -not ($script:STAKisup ) ) {
@@ -1738,7 +1749,7 @@ Function Run-Miner {
 			param ([ Parameter ( Mandatory ) ]
 			       $threads
 			)
-			log-write -logstring "Dead thread check" -fore yellow -notification 1
+			log-write -logstring "Dead thread check" -fore yellow -notification 2
 			$nullThreadsReturned = 0
 
 			foreach ( $thread in $threads ) {
@@ -1753,7 +1764,7 @@ Function Run-Miner {
 
 			}
 
-			log-write -logstring "$nullThreadsReturned dead threads found" -fore yellow -notification 1
+			log-write -logstring "$nullThreadsReturned dead threads found" -fore yellow -notification 4
 			Start-Sleep -s 3
 			if ( $nullThreadsReturned -gt 0 ) {
 				log-write -logstring "Dead threads detected, Most likely going to need a reboot " -fore red -notification 1
@@ -2004,10 +2015,11 @@ Function Run-Miner {
 					if ( ($runTime - $script:nanopoolLastUpdate ) -ge 1 ) {
 
 						try {
+							$error.Clear()
 							nanopoolvars
 							if ( $script:provider -ne 'nanopool' ) {
 								$pool, $diff = $script:ConnectedPool.split( ':' )
-								log-write -logstring "Not using Nanopool, you are using $pool, disabling stats" -fore red -notification 1
+								log-write -logstring "Not using Nanopool, you are using $pool, disabling stats" -fore red -notification 2
 								$script:enableNanopool = 'False'
 							} else {
 								[Decimal] $script:balance = [ math ]::Round( (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,
@@ -2029,6 +2041,8 @@ Function Run-Miner {
 						}
 						catch {
 							log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
+							write-verbose -Message $error
+							pause
 						}
 					}
 				}
@@ -2075,7 +2089,7 @@ Function Run-Miner {
 				Import-Module "Influx" -ErrorAction SilentlyContinue
 				if ( $error ) {
 					$grafanaEnabled = 'False'
-					log-Write -logstring "Disabling Grafana for now" -fore Green  -Linefeed -notification 1
+					log-Write -logstring "Disabling Grafana for now" -fore Green  -Linefeed -notification 4
 				}
 			}
 		}
@@ -2114,7 +2128,7 @@ Function Run-Miner {
 						$script:coin, $null = $coinzone.split( '-' )
 					}
 					catch {
-						log-write -logstring "Error reading pools file, disabling nanopool" -fore red -notification 1
+						log-write -logstring "Error reading pools file, disabling nanopool" -fore red -notification 2
 						$script:enableNanopool = 'False'
 					}
 				} else {
@@ -2188,7 +2202,7 @@ Function Run-Miner {
 			if ( $script:pools ) {
 
 				log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
-				log-write -logstring "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow -notification 2
+				log-write -logstring "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow -notification 3
 				log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 3
 				$bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
 				$ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
@@ -2197,9 +2211,9 @@ Function Run-Miner {
 				# Export coin to mine to script
 				$script:coinToMine = $script:pools[ 0 ]
 
-				log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 1
+				log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 3
 			} else {
-				log-write -logstring "No compatable entries found in $ScriptDir\pools.txt"
+				log-write -logstring "No compatable entries found in $ScriptDir\pools.txt" -fore red -notification 1
 			}
 		}
 
@@ -2212,7 +2226,7 @@ Function Run-Miner {
 			if ( $rawobj.settings ) {
 				$rawobj.settings.psobject.properties | ForEach-Object { $settings[ $_.Name ] = $_.Value }
 
-				log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2 -linefeed
+				log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2
 				if ( $settings.hdiff ) {
 					$script:hdiff = ($settings ).hdiff
 				}
@@ -2234,7 +2248,7 @@ Function Run-Miner {
 				$out += "`n $( $script:amd )"
 				$out += "`n $( $script:nvidia )"
 				$out += "`n $( $script:cpu )"
-				log-write -logstring $out -fore white -notification 3 -Linefeed
+				log-write -logstring $out -fore white -notification 5
 
 				if ( $settings.amd ) {
 					$defaultamd = 'default_amd.txt'
@@ -2355,7 +2369,7 @@ Function Run-Miner {
 
 			if ( test-path -path "$ScriptDir\$STAKfolder" ) {
 				try {
-					log-write -logstring "Writing $STAKfolder\$poolsdottext" -fore green -notification 1
+					log-write -logstring "Writing $STAKfolder\$poolsdottext" -fore green -notification 3
 					foreach ( $p in ($pool ).keys ) {
 						write-entry $p $pool.$p
 					}
@@ -2374,7 +2388,16 @@ Function Run-Miner {
 
 		}
 
-
+		function truncate-sensorfile {
+			if ( $sensorDataFile ) {
+				if ( test-path -path $sensorDataFile ) {
+					write-host "Truncating $sensorDataFile to last 6 lines"
+					# Truncating sensor file
+					$rawTempFile = Get-Content -path $sensorDataFile -last 6
+					$rawTempFile | set-content -path $sensorDataFile
+				}
+			}
+		}
 
 
 
@@ -2393,6 +2416,7 @@ Function Run-Miner {
 			# Display key settings
 			if ( $initalRun ) {
 				log-Write -logstring "Starting the Hash Monitor Script... $ver "-fore White -linefeed  -notification 1
+				$truncateSensorFile = 'True'
 				$initalRun = $false
 			} Else {
 				log-Write -logstring '== Loop Started ==' -fore Green -notification 5
@@ -2410,7 +2434,7 @@ Function Run-Miner {
 			if ( $script:TempWatch )    { $settingsToScreen += "TempWatch enabled:          $script:TempWatch `n" }
 			if ( $killStakOnMaxTemp )   { $settingsToScreen += "killStakOnMaxTemp:          $killStakOnMaxTemp `n" }
 			if ( $TEMPerMaxTemp )       { $settingsToScreen += "TEMPerMaxTemp:              $TEMPerMaxTemp `n" }
-			Log-Write -logstring $settingsToScreen -fore 'White' -notification 2 -linefeed # Display settings
+			Log-Write -logstring $settingsToScreen -fore 'White' -notification 1 -linefeed # Display settings
 
 			write-host "You have $sleeptime seconds before we start next run" -fore Green
 			Start-Sleep -Seconds $sleeptime
@@ -2430,7 +2454,7 @@ Function Run-Miner {
 		} while ($running -eq $true) # Keep running until restart triggered, triggered in call-Self
 
 		# Setup for next run
-		log-write -logstring "Restart triggered`n`n" -fore Red -notification 1
+		log-write -logstring "Restart triggered`n`n" -fore Red -notification 4
 		$running = $true
 
 	} while ( $active -eq $true ) # Used to exit script from anywhwere in code, ignored in fatal driver error
