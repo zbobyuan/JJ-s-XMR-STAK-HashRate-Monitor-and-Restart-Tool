@@ -1,5 +1,13 @@
 Version 4.3.12
-Release Date 2018-07-13
+Release Date 2018-07-22
+
+Changes
+    Bugfix: Nanopool stats issue
+    Tidied up display output
+
+    
+Version 4.3.12
+Release Date 2018-07-22
 
 Changes
     Added additional reboot logic if installed cards less than set value after additional reset

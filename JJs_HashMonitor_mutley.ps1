@@ -231,6 +231,9 @@ Function Run-Miner {
 		# sensor stops responding, Set to huge amount if you do not wish to stop mining on app stop but be careful
 		#TEMPerValidMinutes = 2
 
+		# TEMPer sensor feed OuterTemp or InnerTemp
+		TEMPerSensorLocation = OuterTemp
+
 		# If its too hot do we kill STAK and disable gpu's
 		killStakOnMaxTemp = False
       "
@@ -588,6 +591,10 @@ Function Run-Miner {
 			[int] $TEMPerValidMinutes = $inifilevalues.TEMPerValidMinutes
 		} else { $TEMPerValidMinutes = 0 }
 
+		# Check if TEMPerSensorLocation is enabled
+		if ( $inifilevalues.TEMPerSensorLocation ) {
+			[STRING]$TEMPerSensorLocation = $inifilevalues.TEMPerSensorLocation
+		} else { $TEMPerSensorLocation = 'OuterTemp' }
 
 		# Check if sensorDataFile is specified, If not temp setting are disabled
 		if ( $inifilevalues.sensorDataFile ) {
@@ -718,7 +725,7 @@ Function Run-Miner {
 					$walletattribute.HelpMessage = 'I need a wallet address for this'
 
 					#create an attributecollection object for the attribute we just created.
-					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[ System.Attribute ]
+					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[System.Attribute]
 
 					#add our custom attribute
 					$attributeCollection.Add( $walletattribute )
@@ -740,7 +747,7 @@ Function Run-Miner {
 					$workerattribute.HelpMessage = 'I need a worker name for this'
 
 					#create an attributecollection object for the attribute we just created.
-					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[ System.Attribute ]
+					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[System.Attribute]
 
 					#add our custom attribute
 					$attributeCollection.Add( $workerattribute )
@@ -812,15 +819,15 @@ Function Run-Miner {
 					$null = $null
 					$data = @{ }
 					$error.Clear()
+					$url = "https://api.nanopool.org/v1"
 					$rawdata = Invoke-WebRequest -UseBasicParsing -Uri $url/$coin/$stat -TimeoutSec 60
 					$null = 'True'
 					Write-Verbose -Message ("{0}`t Nanopool API call  `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata ) #-verbose
 				}
 				Catch {
-
 					Write-Verbose -Message ("{0}`t Nanopool issue with API call `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata ) #-Verbose
-					$null = 'False'
-					Write-Verbose -Message $error
+					log-write -logstring "Nanopool api error, Disabling Nanopool stats `n $($Error[0])" -fore 0 -notification 1
+					$script:enableNanopool = 'False'
 				}
 			}
 
@@ -846,7 +853,7 @@ Function Run-Miner {
 
 		function Invoke-RequireAdmin {
 			Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]
-			       [ Management.Automation.InvocationInfo ]
+			       [Management.Automation.InvocationInfo]
 			       $MyInvocation
 			)
 
@@ -964,7 +971,8 @@ Function Run-Miner {
 						$validTime = 'False'
 					}
 
-					$lt = ($script:lastRoomTemp.OuterTemp )
+					$lt = ($script:lastRoomTemp.$TEMPerSensorLocation )
+
 					$lti = ($script:lastRoomTemp.Time )
 
 					$timer = [ Diagnostics.Stopwatch ]::StartNew()
@@ -976,8 +984,8 @@ Function Run-Miner {
 							log-write -logstring "Room temp ok $lt c" -fore green -notification 2
 						}
 
-						start-sleep -s $infoMessageTime
-						while ( ($script:lastRoomTemp.OuterTemp ) -gt $TEMPerMaxTemp ) {
+						start-sleep -s 1
+						while ( ($script:lastRoomTemp.$TEMPerSensorLocation ) -gt $TEMPerMaxTemp ) {
 							if  (($TEMPerValidMinutes - $script:timeDrift) -eq 0) {break}
 							Clear-Host
 							Write-Host "`n`n`nToo Hot, Waiting for temp drop, Current $lt, Max $TEMPerMaxTemp " -fore Red
@@ -1232,7 +1240,7 @@ Function Run-Miner {
 					                       ConvertFrom-Csv |
 					                       Select-Object -Last 1
 					write-verbose "get-room-temps: Last Time $( $script:lastRoomTemp.Time )"
-					write-verbose "get-room-temps: Last Temp $( $script:lastRoomTemp.OuterTemp )"
+					write-verbose "get-room-temps: Last Temp $( $script:lastRoomTemp.$TEMPerSensorLocation )"
 
 					$script:timeDrift = [int] (new-timespan -Start ([DateTime] $script:lastRoomTemp.Time ) -End (Get-Date ) ).TotalMinutes
 
@@ -1256,29 +1264,28 @@ Function Run-Miner {
 			$tmRunTime = get-RunTime -sec ($runTime )
 			$tpUpTime = get-RunTime -sec ($script:UpTime )
 			$displayOutput = "
-          ===========================================================
-          Starting Hash Rate:           $script:maxhash H/s
-          Restart Hash Rate:            $script:rTarget H/s
-          Current Hash Rate:            $script:currHash H/s
-          Minimum Hash Rate:            $script:minhashrate H/s
-          Monitoring Uptime:            $tmRunTime
-          ===========================================================
-          Pool:                         $script:ConnectedPool
-          Uptime:                       $tpUpTime
-          Difficulty:                   $script:currDiff
-          Total Shares:                 $script:TotalShares
-          Good Shares:                  $script:GoodShares
-          Good Share Percent:           $script:sharepercent
-          Share Time:                   $script:TimeShares
-        ===========================================================
-
+===========================================================
+Starting Hash Rate:           $script:maxhash H/s
+Restart Hash Rate:            $script:rTarget H/s
+Current Hash Rate:            $script:currHash H/s
+Minimum Hash Rate:            $script:minhashrate H/s
+Monitoring Uptime:            $tmRunTime
+===========================================================
+Pool:                         $script:ConnectedPool
+Uptime:                       $tpUpTime
+Difficulty:                   $script:currDiff
+Total Shares:                 $script:TotalShares
+Good Shares:                  $script:GoodShares
+Good Share Percent:           $script:sharepercent
+Share Time:                   $script:TimeShares
+===========================================================
 "
 
 			Clear-Host
 
 			if (( $script:validSensorTime -eq 'True' ) -and ($script:lastRoomTemp) ) {
 				$displayOutput += "Last Temp Taken"
-				$displayOutput += $script:lastRoomTemp | Out-String
+				$displayOutput += "`n$($script:lastRoomTemp.Time)         $($script:lastRoomTemp.$TEMPerSensorLocation) C" # | Out-String
 			}
 
 			Write-Host -fore Green $displayOutput
@@ -2006,7 +2013,7 @@ Function Run-Miner {
 
 
 				if (( $script:lastRoomTemp ) -and ($script:validSensorTime -eq 'True')) {
-					$t = [Decimal] ($script:lastRoomTemp ).OuterTemp
+					$t = [Decimal] ($script:lastRoomTemp ).$TEMPerSensorLocation
 					$Metrics.add( "Room_Temp_float", $t )
 				}
 
@@ -2022,9 +2029,8 @@ Function Run-Miner {
 								log-write -logstring "Not using Nanopool, you are using $pool, disabling stats" -fore red -notification 2
 								$script:enableNanopool = 'False'
 							} else {
-								[Decimal] $script:balance = [ math ]::Round( (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,
-								                                             4 )
-								[Decimal] $script:btcprice = [Double] ((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
+								[Decimal]$script:balance = [math]::Round((Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,4 )
+								[Decimal]$script:btcprice = [Double] ((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
 								[int] $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker ).data.'h1'
 
 								$profitData = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash ).data
@@ -2041,8 +2047,9 @@ Function Run-Miner {
 						}
 						catch {
 							log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
-							write-verbose -Message $error
-							
+							$error
+							pause
+
 						}
 					}
 				}
