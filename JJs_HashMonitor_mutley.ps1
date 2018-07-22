@@ -2042,7 +2042,7 @@ Function Run-Miner {
 						catch {
 							log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
 							write-verbose -Message $error
-							pause
+							
 						}
 					}
 				}
