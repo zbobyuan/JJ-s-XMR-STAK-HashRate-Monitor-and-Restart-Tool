@@ -89,6 +89,7 @@ Example pools.json
                 "wallet_address":  "5t5mEm254JNJ9HqRjY9vCiTE8aZALHX3v8TqhyQ3TTF9VHKZQXkRYjPDweT9kK4rJw7dDLtZXGjav2z9y24vXCdRc4mgijA99QZ94AZzaz+80000"
             },
     "sumo":  {
+                 "enabled" : "False"
                  "wallet_address":  "Sumoo13hApaeJmf5eRyukdfVVN13wZcDtEvPqzgzNJ2PDuVY5Z9Mrg2WkZQt5vbHwt8k2xV96aYJSVww33c9R6KNMMUjwcHVjSv",
                  "pool_password":  "pass@heynes.biz",
                  "use_nicehash":  false,

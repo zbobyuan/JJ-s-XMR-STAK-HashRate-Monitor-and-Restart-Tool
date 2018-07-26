@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.3.12'
+		$ver = '4.3.13'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
@@ -1231,9 +1231,9 @@ Function Run-Miner {
 				if ( test-path -path $sensorDataFile ) {
 					$script:sensorData = 'True'
 					write-verbose "get-room-temps: Sensorfile exists $sensorDataFile"
-					if ( $truncateSensorFile -eq 'True' ) {
+					if ( $script:truncateSensorFile -eq 'True' ) {
 						truncate-sensorfile
-						$truncateSensorFile = 'False'
+						$script:truncateSensorFile = 'False'
 					}
 					$script:lastRoomTemp = (get-content -path $sensorDataFile ) -replace ('â|„|ƒ' ) |
 					                       out-string |
@@ -1285,7 +1285,7 @@ Share Time:                   $script:TimeShares
 
 			if (( $script:validSensorTime -eq 'True' ) -and ($script:lastRoomTemp) ) {
 				$displayOutput += "Last Temp Taken"
-				$displayOutput += "`n$($script:lastRoomTemp.Time)         $($script:lastRoomTemp.$TEMPerSensorLocation) C" # | Out-String
+				$displayOutput += "`n$($script:lastRoomTemp.Time)           $($script:lastRoomTemp.$TEMPerSensorLocation) C" # | Out-String
 			}
 
 			Write-Host -fore Green $displayOutput
@@ -2150,6 +2150,14 @@ Share Time:                   $script:TimeShares
 					$poolData = (Get-Content -Path .\pools.json ) -notmatch "^#|^/"| Out-String
 					(ConvertFrom-Json $poolData ).psobject.properties |
 					ForEach-Object { $script:PoolsList[ $_.Name ] = $_.Value }
+					$tempList = $script:PoolsList.Clone()
+					foreach ($c in $script:PoolsList.Keys) {
+						if (($script:PoolsList).$c.enabled -eq 'False') {
+							write-verbose "$c mining disabled in config" -verbose
+							$tempList.Remove("$c")
+						}
+						$script:PoolsList = $tempList
+					}
 					return $true
 				}
 				catch { return $false }
@@ -2369,6 +2377,8 @@ Share Time:                   $script:TimeShares
 				$r.Remove( "amd_txt" )
 				$r.Remove( "nvidia_txt" )
 				$r.Remove( "cpu_txt" )
+				$r.Remove( "enable" )
+
 				$l = $r | ConvertTo-Json
 				$script:poolsdottextContent += ($l + ",`n" )
 			}
@@ -2398,10 +2408,11 @@ Share Time:                   $script:TimeShares
 		function truncate-sensorfile {
 			if ( $sensorDataFile ) {
 				if ( test-path -path $sensorDataFile ) {
-					write-host "Truncating $sensorDataFile to last 6 lines"
+					write-host "Truncating $sensorDataFile to last 6 lines" -fore green
 					# Truncating sensor file
 					$rawTempFile = Get-Content -path $sensorDataFile -last 6
 					$rawTempFile | set-content -path $sensorDataFile
+					start-sleep -s 2
 				}
 			}
 		}
@@ -2423,7 +2434,7 @@ Share Time:                   $script:TimeShares
 			# Display key settings
 			if ( $initalRun ) {
 				log-Write -logstring "Starting the Hash Monitor Script... $ver "-fore White -linefeed  -notification 1
-				$truncateSensorFile = 'True'
+				$script:truncateSensorFile = 'True'
 				$initalRun = $false
 			} Else {
 				log-Write -logstring '== Loop Started ==' -fore Green -notification 5

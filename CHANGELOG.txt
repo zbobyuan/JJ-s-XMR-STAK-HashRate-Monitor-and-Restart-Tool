@@ -1,3 +1,10 @@
+Version 4.3.13
+Release Date 2018-07-26
+
+Changes
+    Added enabled field to pools.json, set to disabled to exclude a coin from mining, commenting out section no longer required
+    Bugfix, truncate sensor file to 6 lines when starting a loop was running every loop
+
 Version 4.3.12
 Release Date 2018-07-22
 
@@ -5,7 +12,7 @@ Changes
     Bugfix: Nanopool stats issue
     Tidied up display output
 
-    
+
 Version 4.3.12
 Release Date 2018-07-22
 
