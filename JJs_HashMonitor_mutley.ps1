@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.3.13'
+		$ver = '4.3.14'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
@@ -981,7 +981,7 @@ Function Run-Miner {
 							log-write -logstring "Room temp $lt c, max temp is set at $TEMPerMaxTemp c last reading taken $lti" -fore yellow -notification 1
 
 						} else {
-							log-write -logstring "Room temp ok $lt c" -fore green -notification 2
+							log-write -logstring "Room temp ok $lt c" -fore green -notification 1
 						}
 
 						start-sleep -s 1
@@ -992,10 +992,10 @@ Function Run-Miner {
 							write-host "`nTime before last reading timeouts and script continues is $( $TEMPerValidMinutes - $script:timeDrift ) Minutes" -fore yellow
 
 							if (( $killStakOnMaxTemp -eq 'True' ) -and ($flag -eq 'True')) {
-								log-write -logstring "Room temp $lt is past set max $TEMPerMaxTemp killStakOnMaxTemp is enabled so killing stak and disabling GPU's until temp drops" -fore red -notification 1
+								log-write -logstring "Room temp $lt is past set max $TEMPerMaxTemp killStakOnMaxTemp is enabled so killing stak until temp drops, resetting gpu's first" -fore red -notification 1
 								kill-Process -STAKexe ($STAKexe )
-								reset-VideoCard -stop
-								$flag = 'False' # Disable the cards once
+								reset-VideoCard -Force
+								$flag = 'False' # Reset the cards once
 							} elseif ($flag -eq 'True') {
 								log-write -logstring "Room temp @ $lt c but stop STAK disabled so exiting wait loop to allow script to monitor hashrate" -fore red -notification 1
 								break
@@ -1561,7 +1561,7 @@ Share Time:                   $script:TimeShares
 			                      sls -n "n/a" ).count
 			if ( $boardCount -ge 1 ) {
 				$boardActual = $boardCount - 1
-				log-write -logstring "CL devices found $boardActual" -fore red -notification 1
+				log-write -logstring "Devices found $boardActual" -fore red -notification 1
 				$deviceinfodebug = (clinfo.exe | sls  "Board Name" ) -replace 'Board Name:'
 				if ( $deviceinfodebug ) {
 					log-write -logstring "Suppoorted Devices $deviceinfodebug"  -fore red -notification 3
