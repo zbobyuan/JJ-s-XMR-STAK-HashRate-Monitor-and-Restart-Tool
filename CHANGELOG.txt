@@ -1,3 +1,9 @@
+Version 4.3.15
+Release Date 2018-07-29
+
+Changes
+    Update to error reporting when stak executable isn't found to assist new users
+
 Version 4.3.14
 Release Date 2018-07-28
 

@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.3.14'
+		$ver = '4.3.15'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
@@ -1331,7 +1331,8 @@ Share Time:                   $script:TimeShares
 					Start-Process -FilePath $STAK -WorkingDirectory $ScriptDir\$script:STAKfolder -WindowStyle Minimized
 				}
 			} Else {
-				log-write -logstring "$script:STAKexe NOT FOUND.. EXITING" -fore Red -notification 0
+				Write-Host "$STAK $STAKcmdline $ScriptDir\$script:STAKfolder\$script:STAKexe Not Found"
+				log-write -logstring "$script:STAKfolder\$script:STAKexe NOT FOUND.. EXITING" -fore Red -notification 0
 				Write-Host -fore Red `n`n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				Write-Host -fore Red "         $script:STAKexe NOT found. "
 				Write-Host -fore Red "   Can't do much without the miner now can you!"
