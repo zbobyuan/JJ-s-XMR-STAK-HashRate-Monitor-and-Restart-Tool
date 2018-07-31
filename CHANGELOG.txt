@@ -1,3 +1,9 @@
+Version 4.3.16
+Release Date 2018-07-31
+
+Changes
+    Added custom Cryptonight heavy adjustment to profit calculations, Needed for Vega Frontier Editions
+
 Version 4.3.15
 Release Date 2018-07-29
 

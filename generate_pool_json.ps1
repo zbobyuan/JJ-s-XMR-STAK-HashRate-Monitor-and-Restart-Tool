@@ -13,40 +13,8 @@ function dev-test {
 			algorithm = 'monero7'
 			settings = @{
 				hdiff = 500
-				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR' )
 				minhashrate = 2200
 			}
-		}
-		etn = @{
-			enabled = 'False'
-			address = @{
-				"xmr-eu1.nanopool.org:14433" = 1
-			}
-			wallet_address = "etnk7Rc6TSLeKeSw5rB7D4ZyaztbffkKh5dpk4PoQ5vaVaHrK4XP5xfQgCiMdwL3uLgCjPL9VFu4Q8vi6yParLv65rXHVq1XvB.$( $env:COMPUTERNAME )/pass@heynes.biz"
-			rig_id = "$( $env:COMPUTERNAME )"
-			pool_password = "pass@heynes.biz"
-			use_nicehash = $false
-			use_tls = $true
-			tls_fingerprint = ''
-			algorithm = 'monero7'
-			settings = @{
-				hdiff = 500
-				tools = ('OverdriveNTool.exe -consoleonly -r1 -p1XMR' )
-				minhashrate = 4000
-			}
-		}
-		sumo = @{
-			address = @{
-				"pool.sumokoin.hashvault.pro:5555" = 50
-				"london01.sumokoin.hashvault.pro:5555" = 50
-			}
-			wallet_address = "Sumoo13hApaeJmf5eRyukdfVVN13wZcDtEvPqzgzNJ2PDuVY5Z9Mrg2WkZQt5vbHwt8k2xV96aYJSVww33c9R6KNMMUjwcHVjSv"
-			rig_id = "$( $env:COMPUTERNAME )"
-			pool_password = "pass@heynes.biz"
-			use_nicehash = $false
-			use_tls = $true
-			tls_fingerprint = ''
-			algorithm = 'sumokin'
 		}
 		msr = @{
 			address = @{
@@ -69,12 +37,13 @@ function dev-test {
 
 		}
 		trtl = @{
+			enabled = 'False'
 			address = @{
 				"trtl.pool.mine2gether.com:6665" = 10
 			}
 			wallet_address = "TRTLv2rhdaNPxiYYAAWcvpRqonkKgmvxa7BcSi8vErdm49h5osRfSWvKjqhYgG64XDJ89o9AdM1FkDmt8n3etpNT383f7BBQ4Xt"
 			rig_id = "$( $env:COMPUTERNAME )"
-			pool_password =  "$( $env:COMPUTERNAME )"
+			pool_password = "$( $env:COMPUTERNAME )"
 			use_nicehash = $false
 			use_tls = $false
 			tls_fingerprint = ''
@@ -88,17 +57,73 @@ function dev-test {
 			}
 
 		}
+		loki = @{
+			address = @{
+				"loki.ingest.cryptoknight.cc:7732" = 10
+			}
+			wallet_address = "LK8CGQ17G9R3ys3Xf33wCeViD2B95jgdpjAhcRsjuheJ784dumXn7g3RPAzedWpFq364jJKYL9dkQ8mY66sZG9BiD26SpDVGQGQQsaPZpq"
+			rig_id = "$( $env:COMPUTERNAME )"
+			pool_password = "$( $env:COMPUTERNAME )"
+			use_nicehash = $false
+			use_tls = $false
+			tls_fingerprint = ''
+			algorithm = 'cryptonight_heavy'
+			settings = @{
+				hdiff = 300
+				minhashrate = 2000
+				amd = 'heavy.txt'
+				nvidia = 'msr_nvidia.txt'
+				cpu = 'msrcpu.txt'
+			}
+
+		}
+		tube = @{
+			address = @{
+				" mining.bit.tube:1777" = 10
+			}
+			wallet_address = "bi1b95WYJRES7oBrvRo2eQV53ExLzFAzjKVM4wp9H9B6irCR6UuQxHf183XsJwemdoQm5PUHhQVwS67Hf5yUE7qg4Swbe5w7KE393ez1baaX7"
+			rig_id = "$( $env:COMPUTERNAME )"
+			pool_password = "$( $env:COMPUTERNAME )"
+			use_nicehash = $false
+			use_tls = $false
+			tls_fingerprint = ''
+			algorithm = 'cryptonight_bittube2'
+			settings = @{
+				hdiff = 300
+				minhashrate = 2000
+				amd = 'heavy.txt'
+				nvidia = 'msr_nvidia.txt'
+				cpu = 'msrcpu.txt'
+			}
+
+		}
+		XHV = @{
+			address = @{
+				"haven.ingest.cryptoknight.cc:5832" = 10
+			}
+			wallet_address = "hvi1aCqoAZF19J8pijvqnrUkeAeP8Rvr4XyfDMGJcarhbL15KgYKM1hN7kiHMu3fer5k8JJ8YRLKCahDKFgLFgJMYAfnF4hGrpK3byEeSWP1f"
+			rig_id = "$( $env:COMPUTERNAME )"
+			pool_password = "$( $env:COMPUTERNAME )"
+			use_nicehash = $false
+			use_tls = $false
+			tls_fingerprint = ''
+			algorithm = 'cryptonight_haven'
+			settings = @{
+				hdiff = 300
+				minhashrate = 2000
+				amd = 'heavy.txt'
+				nvidia = 'msr_nvidia.txt'
+				cpu = 'msrcpu.txt'
+			}
+
+		}
 
 	}
 
-
-	#$PoolsList | ConvertTo-Json -Depth 4
 	$poolsfile = 'pools.json'
 
 	$PoolsList | ConvertTo-Json -Depth 6 | Set-Content $poolsfile
 	get-Content $poolsfile
 }
-d:
-cd D:\Users\Mark\WebstormProjects\JJ-s-XMR-STAK-HashRate-Monitor-and-Restart-Tool
-pwd
+
 dev-test

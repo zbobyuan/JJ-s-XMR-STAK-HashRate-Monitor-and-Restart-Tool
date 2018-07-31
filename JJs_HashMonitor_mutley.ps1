@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.3.15'
+		$ver = '4.3.16'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		Push-Location -Path $PSScriptRoot
@@ -38,9 +38,8 @@ Function Run-Miner {
 		$script:STAKisup = $false
 		$script:threadArray = @()
 		$script:nanopoolLastUpdate = 0
-		$script:pools = [Ordered] @{ }
 		$script:PoolsList = @{ }
-		$script:pools = [Ordered] @{ }
+		$script:pools = [Ordered]@{ }
 		$script:lastRoomTemp = @{ }
 		$script:timeDrift = 999999
 		$script:validSensorTime = $null
@@ -214,6 +213,9 @@ Function Run-Miner {
 
         # Enable profit switching, Please read the ProfitReadme.md before enabling this
         profitSwitching  = False
+
+		# Customise cryptonight-heavy adjustment should be 1.1 for Vega FE
+		profitHeavyAdjustment = 1.1
 
 		# Enable temp reporting and control functions
 		#TempWatch = True
@@ -569,6 +571,13 @@ Function Run-Miner {
 			[string] $profitSwitching = $inifilevalues.profitSwitching
 		} else {
 			$profitSwitching = 'False'
+		}
+
+		# Check if profitHeavyAdjustment is set
+		if ( $inifilevalues.profitHeavyAdjustment ) {
+			[decimal] $profitHeavyAdjustment = $inifilevalues.profitHeavyAdjustment
+		} else {
+			$profitHeavyAdjustment = 1.0
 		}
 
 		# Check if TEMPerMaxTemp is enabled
@@ -2208,31 +2217,47 @@ Share Time:                   $script:TimeShares
 			foreach ( $coin in $rawdata.rewards ) {
 				#write-host $coin.ticker_symbol $coin.reward_24h.btc
 				if ( ($coin.ticker_symbol ) |Where-Object ({ $_ -in $supportedCoins } ) ) {
-					$script:pools.Add( [Decimal] $coin.reward_24h.btc, $coin.ticker_symbol )
+					if ( ($coin.algorithm ) -eq 'cryptonight-heavy' ) {
+						$script:pools.Add( $coin.ticker_symbol,
+						                   [decimal][ System.Math ]::Round( (($coin.reward_24h.btc / ($rawdata.'cryptonight-heavy_factor' ) ) * $profitHeavyAdjustment ),
+						                                                    10 ) )
+					} else {
+						$script:pools.Add( $coin.ticker_symbol,
+						                   [decimal][ System.Math ]::Round( $coin.reward_24h.btc, 10 ) )
+					}
 				} else {
-					$bestcoins.Add( [Decimal] $coin.reward_24h.btc, $coin.ticker_symbol )
+					if ( ($coin.algorithm ) -eq 'cryptonight-heavy' ) {
+						$bestcoins.Add( $coin.ticker_symbol,
+						                [decimal][ System.Math ]::Round( (($coin.reward_24h.btc / ($rawdata.'cryptonight-heavy_factor' ) ) * $profitHeavyAdjustment ),
+						                                                 10 ) )
+					} else {
+						$bestcoins.Add( $coin.ticker_symbol,
+						                [decimal][ System.Math ]::Round( $coin.reward_24h.btc, 10 ) )
+					}
+
 				}
 			}
 
 			#Check our pools
 			if ( $script:pools ) {
 
-				log-write -logstring "Coins checked,  We are going to mine $( $script:pools[ 0 ] )" -fore green -notification 1
-				log-write -logstring "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow -notification 3
-				log-write -logstring  ($script:pools | out-string ) -fore yellow -notification 3
-				$bestcoin = ($bestcoins.GetEnumerator() | Select-Object -First 1 ).Name
-				$ourcoin = ($script:pools.GetEnumerator() | Select-Object -First 1 ).Name
-				$profitLoss = $bestcoin - $ourcoin
+				$bestcoin = ($bestcoins.GetEnumerator() | Sort-Object Value -Descending )[ 0 ]
+				$ourcoin = ($script:pools.GetEnumerator() | Sort-Object Value -Descending )[ 0 ]
+				$profitLoss = $bestcoin.Value - $ourcoin.Value
+				log-write -logstring "Coins checked,  We are going to mine $($ourcoin.Name) " -fore green -notification 1
+				write-host "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow
+				write-host  ($script:pools.GetEnumerator() | Sort-Object Value -Descending |
+				             out-string ) -fore yellow
+
 
 				# Export coin to mine to script
-				$script:coinToMine = $script:pools[ 0 ]
+				$script:coinToMine = $ourcoin.Name
 
-				log-write -logstring "You would have earned $profitLoss more BTC Per day Mining $( $bestcoins[ 0 ] )" -fore yellow -notification 3
+				log-write -logstring   "You would have earned $profitLoss more BTC Per day Mining $( $bestcoin.Name )" -fore yellow -notification 3
 			} else {
-				log-write -logstring "No compatable entries found in $ScriptDir\pools.txt" -fore red -notification 1
+				log-write -logstring   "No compatable entries found in $ScriptDir\pools.txt" -fore red -notification 1
 			}
 		}
-
 
 		function get-coin-specific-parameters {
 			$poolfile = @{ }
