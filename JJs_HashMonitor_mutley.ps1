@@ -577,7 +577,7 @@ Function Run-Miner {
 		if ( $inifilevalues.profitHeavyAdjustment ) {
 			[decimal] $profitHeavyAdjustment = $inifilevalues.profitHeavyAdjustment
 		} else {
-			$profitHeavyAdjustment = 1.0
+			$profitHeavyAdjustment = 0.6
 		}
 
 		# Check if TEMPerMaxTemp is enabled
