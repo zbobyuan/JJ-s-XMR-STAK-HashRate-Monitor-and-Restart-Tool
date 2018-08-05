@@ -4,10 +4,12 @@ $startattempt = 0
 
 
 Function Run-Miner {
+	try {
 	do {
-		$ver = '4.3.16'
+		$ver = '4.4.0'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
+		$ErrorActionPreference = 'Inquire'
 		Push-Location -Path $PSScriptRoot
 		$Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool, Reworked  by Mutl3y v$ver"
 		$Host.UI.RawUI.BackgroundColor = 'Black'
@@ -39,19 +41,77 @@ Function Run-Miner {
 		$script:threadArray = @()
 		$script:nanopoolLastUpdate = 0
 		$script:PoolsList = @{ }
-		$script:pools = [Ordered]@{ }
+		$script:pools = @{ }
 		$script:lastRoomTemp = @{ }
 		$script:timeDrift = 999999
 		$script:validSensorTime = $null
-		$proftStatRefreshTime = 60
+		$script:profitCheckDateTime = (get-date)
 		$poolsdottext = "pools.txt"
 		$poolsfile = 'pools.json'
-
+		$script:displayOutput2 = [ordered]@{}
 
 		$stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
 		$runTime = 0
 
 		########## END STATIC Variables - MAKE NO CHANGES ABOVE THIS LINE #######
+
+		# Add display to string method to hashtable type
+		Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ToDisplayString `
+        -Value {
+			$maxLength = ($this.keys.length | measure -Maximum ).Maximum
+			$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
+				$v = $this[ $key ]; $stringLength = [int] $key.length
+				$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
+				if ( $key -match "\s" ) {
+					$hashstr += "$key" + $spacing + $v + "`n"
+
+				} else {
+					$hashstr += "$key" + $spacing + $v + "`n"
+				}
+			}
+			return $hashstr
+		}
+
+		# Add display to string method to ordered hashtable type
+		Update-TypeData -TypeName System.Collections.Specialized.OrderedDictionary -MemberType ScriptMethod -MemberName ToDisplayString `
+        -Value {
+			$maxLength = ($this.keys.length | measure -Maximum ).Maximum
+			$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
+				$v = $this[ $key ]; $stringLength = [int] $key.length
+				$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
+				if ( $key -match "\s" ) {
+					$hashstr += "$key" + $spacing + $v + "`n"
+
+				} else {
+					$hashstr += "$key" + $spacing + $v + "`n"
+				}
+			}
+			return $hashstr
+		}
+
+		# Add sort to hashtable type by name
+		Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName NameSort `
+        -Value {
+			$sorted = ($this.GetEnumerator() | Sort-Object Key )
+			$ht = [ordered]@{}
+			foreach ($key in $sorted){
+				#write-host "key $($key.Key) : Value $($key.Value)"
+				$ht.Add($key.Key, $key.Value )
+			}
+			return $ht
+		}
+
+		# Add sort to hashtable type by value
+		Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ValueSort `
+        -Value {
+			$sorted = ($this.GetEnumerator() | Sort-Object Value -Descending)
+			$ht = [ordered]@{}
+			foreach ($key in $sorted){
+				#write-host "key $($key.Key) : Value $($key.Value)"
+				$ht.Add($key.Key, $key.Value )
+			}
+			return $ht
+		}
 
 		#########################################################################
 		# Set the REQUIRED variables for your Mining Configuration              #
@@ -214,6 +274,18 @@ Function Run-Miner {
         # Enable profit switching, Please read the ProfitReadme.md before enabling this
         profitSwitching  = False
 
+		# Enable profit checking whilst mining
+		profitLiveCheckingEnabled = True
+
+		# Kill STAK to switch coins
+		profitKillRunningStak = False
+
+		# Minimum extra profit before switching coins
+		profitSwitchPercentage = 5
+
+		# Minimum uptime before concidering switching coins
+		ProfitCheckMinutes = 30
+
 		# Customise cryptonight-heavy adjustment should be 1.1 for Vega FE
 		profitHeavyAdjustment = 1.1
 
@@ -255,8 +327,8 @@ Function Run-Miner {
 		}
 
 		$inifilevalues = (Get-Content -Path $Path |
-		                 Where-Object { ($_.Contains( '=' ) ) -notcontains (($_.Contains( 'vidTool' ) ) ) } |
-		                 Out-String ) -replace '\\', '\\' |
+		                  Where-Object { ($_.Contains( '=' ) ) -notcontains (($_.Contains( 'vidTool' ) ) ) } |
+		                  Out-String ) -replace '\\', '\\' |
 		                 ConvertFrom-StringData
 
 		if ( $debug ) {
@@ -580,6 +652,35 @@ Function Run-Miner {
 			$profitHeavyAdjustment = 0.6
 		}
 
+		# Enable live prifit checking
+		if ( $inifilevalues.profitLiveCheckingEnabled ) {
+			[string] $profitLiveCheckingEnabled = $inifilevalues.profitLiveCheckingEnabled
+		} else {
+			$profitLiveCheckingEnabled = False
+		}
+
+		# Kill STAK to switch coins
+		if ( $inifilevalues.profitKillRunningStak ) {
+			[string] $profitKillRunningStak = $inifilevalues.profitKillRunningStak
+		} else {
+			$profitKillRunningStak = False
+		}
+
+		# Minimum extra profit before switching coins
+		if ( $inifilevalues.profitSwitchPercentage ) {
+			[int] $profitSwitchPercentage = $inifilevalues.profitSwitchPercentage
+		} else {
+			$profitSwitchPercentage = 5
+		}
+
+		# Minimum uptime before concidering switching coins
+
+		if ( $inifilevalues.ProfitCheckMinutes ) {
+			[decimal] $ProfitCheckMinutes = $inifilevalues.ProfitCheckMinutes
+		} else {
+			$ProfitCheckMinutes = 30
+		}
+
 		# Check if TEMPerMaxTemp is enabled
 		if ( $inifilevalues.TempWatch ) {
 			[string] $script:TempWatch = $inifilevalues.TempWatch
@@ -602,12 +703,12 @@ Function Run-Miner {
 
 		# Check if TEMPerSensorLocation is enabled
 		if ( $inifilevalues.TEMPerSensorLocation ) {
-			[STRING]$TEMPerSensorLocation = $inifilevalues.TEMPerSensorLocation
+			[STRING] $TEMPerSensorLocation = $inifilevalues.TEMPerSensorLocation
 		} else { $TEMPerSensorLocation = 'OuterTemp' }
 
 		# Check if sensorDataFile is specified, If not temp setting are disabled
 		if ( $inifilevalues.sensorDataFile ) {
-			$sensorDataFile = ($inifilevalues.sensorDataFile ) -replace '//', '/'
+			$sensorDataFile = ($inifilevalues.sensorDataFile ) -replace '///', '/'
 		}
 
 		# Check if killStakOnMaxTemp is enabled
@@ -734,7 +835,7 @@ Function Run-Miner {
 					$walletattribute.HelpMessage = 'I need a wallet address for this'
 
 					#create an attributecollection object for the attribute we just created.
-					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[System.Attribute]
+					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[ System.Attribute ]
 
 					#add our custom attribute
 					$attributeCollection.Add( $walletattribute )
@@ -756,7 +857,7 @@ Function Run-Miner {
 					$workerattribute.HelpMessage = 'I need a worker name for this'
 
 					#create an attributecollection object for the attribute we just created.
-					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[System.Attribute]
+					$attributeCollection = new-object -TypeName System.Collections.ObjectModel.Collection[ System.Attribute ]
 
 					#add our custom attribute
 					$attributeCollection.Add( $workerattribute )
@@ -835,7 +936,7 @@ Function Run-Miner {
 				}
 				Catch {
 					Write-Verbose -Message ("{0}`t Nanopool issue with API call `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata ) #-Verbose
-					log-write -logstring "Nanopool api error, Disabling Nanopool stats `n $($Error[0])" -fore 0 -notification 1
+					log-write -logstring "Nanopool api error, Disabling Nanopool stats `n $( $Error[ 0 ] )" -fore 0 -notification 1
 					$script:enableNanopool = 'False'
 				}
 			}
@@ -862,7 +963,7 @@ Function Run-Miner {
 
 		function Invoke-RequireAdmin {
 			Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]
-			       [Management.Automation.InvocationInfo]
+			       [ Management.Automation.InvocationInfo ]
 			       $MyInvocation
 			)
 
@@ -995,12 +1096,12 @@ Function Run-Miner {
 
 						start-sleep -s 1
 						while ( ($script:lastRoomTemp.$TEMPerSensorLocation ) -gt $TEMPerMaxTemp ) {
-							if  (($TEMPerValidMinutes - $script:timeDrift) -eq 0) {break}
+							if ( ($TEMPerValidMinutes - $script:timeDrift ) -eq 0 ) { break }
 							Clear-Host
 							Write-Host "`n`n`nToo Hot, Waiting for temp drop, Current $lt, Max $TEMPerMaxTemp " -fore Red
 							write-host "`nTime before last reading timeouts and script continues is $( $TEMPerValidMinutes - $script:timeDrift ) Minutes" -fore yellow
 
-							if (( $killStakOnMaxTemp -eq 'True' ) -and ($flag -eq 'True')) {
+							if ( ( $killStakOnMaxTemp -eq 'True' ) -and ($flag -eq 'True' ) ) {
 								log-write -logstring "Room temp $lt is past set max $TEMPerMaxTemp killStakOnMaxTemp is enabled so killing stak until temp drops, resetting gpu's first" -fore red -notification 1
 								kill-Process -STAKexe ($STAKexe )
 								reset-VideoCard -Force
@@ -1038,7 +1139,7 @@ Function Run-Miner {
 		function reset-VideoCard {
 			##### Reset Video Card(s) #####
 
-			param ([ switch ]$Force, [switch]$stop
+			param ([ switch ]$Force, [ switch ]$stop
 			)
 			log-Write -logstring 'Resetting Video Card(s)...' -fore White -notification 1
 			$allCards = Get-PnpDevice|
@@ -1268,40 +1369,49 @@ Function Run-Miner {
 
 
 
-	##################################
+		##################################
 		Function refresh-Screen {
 			$tmRunTime = get-RunTime -sec ($runTime )
 			$tpUpTime = get-RunTime -sec ($script:UpTime )
-			$displayOutput = "
-===========================================================
-Starting Hash Rate:           $script:maxhash H/s
-Restart Hash Rate:            $script:rTarget H/s
-Current Hash Rate:            $script:currHash H/s
-Minimum Hash Rate:            $script:minhashrate H/s
-Monitoring Uptime:            $tmRunTime
-===========================================================
-Pool:                         $script:ConnectedPool
-Uptime:                       $tpUpTime
-Difficulty:                   $script:currDiff
-Total Shares:                 $script:TotalShares
-Good Shares:                  $script:GoodShares
-Good Share Percent:           $script:sharepercent
-Share Time:                   $script:TimeShares
-===========================================================
-"
+
+			$script:displayOutput2 = [ordered] @{
+				"Starting Hash Rate" = "$script:maxhash H/s"
+				"Restart Hash Rate" = "$script:rTarget H/s"
+				"Current Hash Rate" = "$script:currHash H/s"
+				"Minimum Hash Rate" = "$script:minhashrate H/s"
+				"Monitoring Uptime" = "$tmRunTime"
+				"Pool" = "$script:ConnectedPool"
+				"Uptime" = "$tpUpTime"
+				"Difficulty" = "$script:currDiff"
+				"Total Shares" = "$script:TotalShares"
+				"Good Shares" = "$script:GoodShares"
+				"Good Share Percent" = "$script:sharepercent"
+				"Share Time" = "$script:TimeShares"
+			}
+
+
+			if ( ( $script:validSensorTime -eq 'True' ) -and ($script:lastRoomTemp ) ) {
+				$script:displayOutput2 += @{"Last Temp Reading" =  @{"$( $script:lastRoomTemp.Time )" = "$( $script:lastRoomTemp.$TEMPerSensorLocation ) C" }.ToDisplayString()}
+			}
+
+			if ( $script:coins ) {
+				$script:displayOutput2 += show-Coin-Info
+			}
+
+			if ( $profitLiveCheckingEnabled -eq 'True' ) {
+				$now = (get-date )
+
+				$nextCheck = ($script:profitCheckDateTime ).AddMinutes( $ProfitCheckMinutes )
+				$countdown = [ math ]::Round( ($nextCheck - $now ).TotalSeconds, 0 )
+				$tFormat = get-RunTime -sec ($countdown )
+				$script:displayOutput2 += @{ "Last Profit check" = ($script:profitCheckDateTime ) }
+				$script:displayOutput2 += @{ "Next Profit check" = $nextCheck }
+				$script:displayOutput2 += @{ "Time Now" = $now }
+				$script:displayOutput2 += @{ "Next Profit check due in" = "$tFormat" }
+			}
 
 			Clear-Host
-
-			if (( $script:validSensorTime -eq 'True' ) -and ($script:lastRoomTemp) ) {
-				$displayOutput += "Last Temp Taken"
-				$displayOutput += "`n$($script:lastRoomTemp.Time)           $($script:lastRoomTemp.$TEMPerSensorLocation) C" # | Out-String
-			}
-
-			Write-Host -fore Green $displayOutput
-			if ( $script:coins ) {
-				show-Coin-Info
-			}
-
+			Write-Host -fore Green $script:displayOutput2.ToDisplayString()
 		}
 
 		Function Run-Tools {
@@ -1392,7 +1502,7 @@ Share Time:                   $script:TimeShares
 				$script:runMinutes = $myTimeSpan.Minutes
 				Return "$script:runMinutes Min"
 			} Elseif ($sec -lt 60) {
-				Return 'Less than 1 minute'
+				Return "$sec Seconds"
 			}
 		}
 
@@ -1649,12 +1759,18 @@ Share Time:                   $script:TimeShares
 			write-host "`n"
 			$elapsedTimer.Stop()
 			check-room-temps
+			if ( $profitSwitching -eq 'True' ) {
+				log-write -logstring "Profit switching enabled" -fore green -notification 1
+				if (!(read-Pools-File )) {
+					log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
+					log-write -logstring "Error messages `n $( $Error[ 0 ].InvocationInfo.line )"
+				}
+			}
+
 			If ( -not ($script:STAKisup ) ) {
 				Clear-Host
 				# Check if profit switching is enabled and generate pools.txt if it is using pools.json
 				if ( $profitSwitching -eq 'True' ) {
-
-					log-write -logstring "Profit switching enabled" -fore green -notification 1
 					if ( read-Pools-File ) {
 						check-Profit-Stats $script:PoolsList.Keys $script:minhashrate
 						get-coin-specific-parameters
@@ -1666,6 +1782,7 @@ Share Time:                   $script:TimeShares
 					} else {
 						log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
 						log-write -logstring "Error messages `n $( $Error[ 0 ].InvocationInfo.line )"
+						start-sleep -s 15
 					}
 				}
 
@@ -1684,6 +1801,16 @@ Share Time:                   $script:TimeShares
 				}
 				set-STAKVars # Set  environment variables
 				start-Mining # Start mining software
+			} else {
+				if ( $profitLiveCheckingEnabled -eq 'True' ) {
+					refreshSTAK
+					foreach ( $pool in $script:PoolsList.Keys ) {
+						if (($script:PoolsList[$pool]).address.$script:ConnectedPool){
+							Check-Profit-Stats @($pool) $script:minhashrate
+						}
+					}
+					check-current-profit -force
+				}
 			}
 		}
 
@@ -1881,9 +2008,10 @@ Share Time:                   $script:TimeShares
 				refreshSTAK
 				refresh-Screen
 				grafana
-				Start-Sleep -Seconds $sleeptime
 				$timer = ($timer + $sleeptime )
 				$runTime = ($timer )
+				if ( $profitLiveCheckingEnabled -eq 'True' ) { check-current-profit }
+				Start-Sleep -Seconds $sleeptime
 			} while ($script:currHash -gt $script:minhashrate )
 
 			If ( $script:currHash -lt $script:minhashrate ) {
@@ -2016,15 +2144,15 @@ Share Time:                   $script:TimeShares
 				if ( $script:threadArray[ 0 ] ) {
 					$script:threadArray | ForEach-Object -Begin { $seq = 0 } -Process {
 						$key = "Thread_$seq"
-						$Metrics.add( $key, $script:threadArray[ $seq ] )
+						$Metrics += @{ $key = $script:threadArray[ $seq ]}
 						$seq++
 					}
 				}
 
 
-				if (( $script:lastRoomTemp ) -and ($script:validSensorTime -eq 'True')) {
+				if ( ( $script:lastRoomTemp ) -and ($script:validSensorTime -eq 'True' ) ) {
 					$t = [Decimal] ($script:lastRoomTemp ).$TEMPerSensorLocation
-					$Metrics.add( "Room_Temp_float", $t )
+					$Metrics += @{ "Room_Temp_float" = $t }
 				}
 
 
@@ -2039,8 +2167,9 @@ Share Time:                   $script:TimeShares
 								log-write -logstring "Not using Nanopool, you are using $pool, disabling stats" -fore red -notification 2
 								$script:enableNanopool = 'False'
 							} else {
-								[Decimal]$script:balance = [math]::Round((Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,4 )
-								[Decimal]$script:btcprice = [Double] ((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
+								[Decimal] $script:balance = [ math ]::Round( (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,
+								                                             4 )
+								[Decimal] $script:btcprice = [Double] ((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
 								[int] $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker ).data.'h1'
 
 								$profitData = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash ).data
@@ -2068,22 +2197,19 @@ Share Time:                   $script:TimeShares
 		}
 
 		Function show-Coin-Info {
-			$t = $host.ui.RawUI.ForegroundColor
-			$host.ui.RawUI.ForegroundColor = "Green"
-			$coininfo = New-Object PSObject
-			$coininfo  | Add-Member -NotePropertyName 'Balance' -NotePropertyValue $script:balance
-			$coininfo  | Add-Member -NotePropertyName 'H/R' -NotePropertyValue $script:avghash1hr
-			$coininfo  | Add-Member -NotePropertyName 'BTC' -NotePropertyValue   $script:btcprice
-			$coininfo  | Add-Member -NotePropertyName $( $script:coin ) -NotePropertyValue  $script:coins
-			$coininfo  |
-			Add-Member -NotePropertyName "BTC per $coinStats" -NotePropertyValue $( $script:coins * $script:btcprice )
-			$coininfo  | Add-Member -NotePropertyName Dollars  -NotePropertyValue $script:dollars
-			$coininfo | Format-Table
-			$host.ui.RawUI.ForegroundColor = $t
+			$coininfo = [ ordered ]@{
+				'Balance' = $script:balance
+				'H/R' = $script:avghash1hr
+				'BTC' = $script:btcprice
+				"$script:coin" = $script:coins
+				"BTC per $coinStats" = ( $script:coins * $script:btcprice )
+				"Dollars" = $script:dollars
+			}
+		return $coininfo
 		}
 
-		Function check-Influx {
-			if ( $grafanaEnabled -eq 'True' ) {
+			Function check-Influx {
+				if ( $grafanaEnabled -eq 'True' ) {
 				$error.clear()
 				Import-Module "Influx" -ErrorAction SilentlyContinue
 				if ( $error ) {
@@ -2161,10 +2287,10 @@ Share Time:                   $script:TimeShares
 					(ConvertFrom-Json $poolData ).psobject.properties |
 					ForEach-Object { $script:PoolsList[ $_.Name ] = $_.Value }
 					$tempList = $script:PoolsList.Clone()
-					foreach ($c in $script:PoolsList.Keys) {
-						if (($script:PoolsList).$c.enabled -eq 'False') {
+					foreach ( $c in $script:PoolsList.Keys ) {
+						if ( ($script:PoolsList ).$c.enabled -eq 'False' ) {
 							write-verbose "$c mining disabled in config" -verbose
-							$tempList.Remove("$c")
+							$tempList.Remove( "$c" )
 						}
 						$script:PoolsList = $tempList
 					}
@@ -2179,14 +2305,16 @@ Share Time:                   $script:TimeShares
 
 		Function check-Profit-Stats {
 			Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]$coins,
-			       [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][ int ]$hr
+			       [ Parameter ( Position = 1, Mandatory, ValueFromPipeline ) ][ int ]$hr,
+			       [switch]$silent
 			)
+
 			$statsURL = "https://minecryptonight.net/api/rewards?hr=$hr&limit=0"
 			$uridata = $null
 			$path = "$ScriptDir\profit.json"
 			$data = @{ }
 			if ( $coins ) { $supportedCoins = $coins.ToUpper() }
-			$bestcoins = [Ordered] @{ }
+			$bestcoins = @{ }
 
 			function get-stats {
 				try {
@@ -2212,7 +2340,7 @@ Share Time:                   $script:TimeShares
 
 			#Read from profit.json
 			$rawdata = (Get-Content -RAW -Path $path | Out-String | ConvertFrom-Json )
-
+			$script:pools = @{}
 			#Add each coin to an ordered list, Storing each coin's name as the value so item 0 is always best coin
 			foreach ( $coin in $rawdata.rewards ) {
 				#write-host $coin.ticker_symbol $coin.reward_24h.btc
@@ -2240,23 +2368,66 @@ Share Time:                   $script:TimeShares
 
 			#Check our pools
 			if ( $script:pools ) {
-
-				$bestcoin = ($bestcoins.GetEnumerator() | Sort-Object Value -Descending )[ 0 ]
-				$ourcoin = ($script:pools.GetEnumerator() | Sort-Object Value -Descending )[ 0 ]
+				$bestcoin = ($bestcoins.ValueSort()).GetEnumerator() | Select-Object -first 1
+				$ourcoin = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
 				$profitLoss = $bestcoin.Value - $ourcoin.Value
-				log-write -logstring "Coins checked,  We are going to mine $($ourcoin.Name) " -fore green -notification 1
-				write-host "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow
-				write-host  ($script:pools.GetEnumerator() | Sort-Object Value -Descending |
-				             out-string ) -fore yellow
+				if (!($silent)) {
+					log-write -logstring "Coins checked,  We are mining $( $ourcoin.Name ) " -fore green -notification 1
+					write-host "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow
+					write-host ($script:pools.ValueSort()).ToDisplayString()
+					log-write -logstring   "Difference in Daily earnings:  $profitLoss BTC Per day Mining $( $bestcoin.Name )" -fore yellow -notification 3
+				}
 
-
-				# Export coin to mine to script
-				$script:coinToMine = $ourcoin.Name
-
-				log-write -logstring   "You would have earned $profitLoss more BTC Per day Mining $( $bestcoin.Name )" -fore yellow -notification 3
-			} else {
+					# Export coin to mine to script
+					$script:coinToMine = $ourcoin.Name
+				} else {
 				log-write -logstring   "No compatable entries found in $ScriptDir\pools.txt" -fore red -notification 1
 			}
+		}
+
+		function check-current-profit {
+			param ([switch]$force)
+			$now = (get-date )
+			$nextCheck = ($script:profitCheckDateTime).AddMinutes($ProfitCheckMinutes)
+			if ((  $now -ge $nextCheck ) -or $force) {
+				log-write -logstring "Profit stats checking triggered " -notification 3 -fore yellow
+				$script:profitCheckDateTime = (Get-Date)
+				# Save current state
+				$currentSave = $script:pools
+				$lastcoin = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
+				$script:pools = @{ } # Clean current hashtable
+
+				# Update stats
+				check-Profit-Stats $script:PoolsList.Keys $script:minhashrate -Silent
+				$bestCoinNow = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
+				$diff = ($bestCoinNow.value - $lastcoin.value )
+				$lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 )
+
+				function restore-Coinstats { $script:pools = $currentSave } # Restore saved stats
+
+				if ( $lossPercentage -ge $profitSwitchPercentage ) {
+					log-write -logstring "Could earn up to $lossPercentage % more mining $( $lastcoin.name ) BTC " -notification 3 -fore Yellow
+					if ( $profitKillRunningStak -eq 'True' ) {
+						log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script" -notification 1 -fore Yellow
+						kill-Process -STAKexe ($STAKexe)
+						start-sleep -s 30
+						call-self
+					} else {
+						log-write -logstring "Live Profit Switching enabled but profitKillRunningStak is not enabled continuing to mine $( $lastcoin.name )" -notification 1 -fore Red
+						restore-Coinstats
+					}
+				} else {
+					if ($lastcoin.Name -eq $bestcoin.Name){
+						log-write -logstring "Continuing to mine $($lastcoin.Name)" -notification 3 -fore Yellow
+					}	else {
+					log-write -logstring "Could not earn more than $profitSwitchPercentage % by switching coins ($lossPercentage), continuing to mine $($lastcoin.Name) Losing BTC $diff per day" -notification 3 -fore Yellow
+					}
+					restore-Coinstats
+					Start-Sleep -s $sleeptime
+
+				}
+			}
+
 		}
 
 		function get-coin-specific-parameters {
@@ -2298,17 +2469,17 @@ Share Time:                   $script:TimeShares
 						try {
 
 							copy-item ("$ScriptDir\$script:STAKfolder\$script:amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" )
-
+							log-write -logstring "Copied $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore White -notification 3
 						}
 						catch {
-							log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore red -notification 3
+							log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore Red -notification 3
 						}
 					} else {
 						log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:amd" ) loading defaults "-fore Red -notification 3 -linefeed
 
 						if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultamd" ) {
 							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultamd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" ) -force )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultamd" )" -fore white -notification 3
+							log-write -logstring "Copied $( "$ScriptDir\$script:STAKfolder\$defaultamd" )" -fore white -notification 3
 						} else {
 							log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultamd" ) you need this file to fall back too, can be empty"  -fore red -notification 3
 							Pause-Then-Exit
@@ -2316,13 +2487,14 @@ Share Time:                   $script:TimeShares
 					}
 				}
 
+
 				if ( $settings.nvidia ) {
 					$defaultnv = 'default_nvidia.txt'
 					$script:nvidia = ($settings ).nvidia
 					if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:nvidia" ) {
 						try {
 							copy-item ("$ScriptDir\$script:STAKfolder\$script:nvidia" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore white -notification 3
+							log-write -logstring "Copied $( "$ScriptDir\$script:STAKfolder\$script:nvidia" )"  -fore white -notification 3
 
 						}
 						catch {
@@ -2331,8 +2503,8 @@ Share Time:                   $script:TimeShares
 					} else {
 						log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:nvidia" ) loading defaults "-fore Red -notification 3 -linefeed
 						if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultnv" ) {
-							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultnv" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" ) -force )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$defaultnv" )" -fore white -notification 3
+							copy-item ("$ScriptDir\$script:STAKfolder\$defaultnv" ) -destination ("$ScriptDir\$script:STAKfolder\nvidia.txt" ) -force
+							log-write -logstring "Copied $( "$ScriptDir\$script:STAKfolder\$defaultnv" )" -fore white -notification 3
 						} else {
 							log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultnv" ) you need this file to fall back too, can be empty"  -fore red -notification 3
 							Pause-Then-Exit
@@ -2345,8 +2517,8 @@ Share Time:                   $script:TimeShares
 					$script:cpu = ($settings ).cpu
 					if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:cpu" ) {
 						try {
-							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$script:cpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) )
-							log-write -logstring "Copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore white -notification 3
+							copy-item ("$ScriptDir\$script:STAKfolder\$script:cpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" )
+							log-write -logstring "Copied $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore white -notification 3
 						}
 						catch {
 							log-write -logstring "Error copying $( "$ScriptDir\$script:STAKfolder\$script:cpu" )" -fore red -notification 3
@@ -2355,7 +2527,7 @@ Share Time:                   $script:TimeShares
 						log-write -logstring "File not found  $( "$ScriptDir\$script:STAKfolder\$script:cpu" ) loading defaults  " -fore Red -notification 3 -linefeed
 						if ( test-path -path "$ScriptDir\$script:STAKfolder\$defaultcpu" ) {
 							$null = (copy-item ("$ScriptDir\$script:STAKfolder\$defaultcpu" ) -destination ("$ScriptDir\$script:STAKfolder\cpu.txt" ) -force )
-							log-write -logstring "Copying  $( "$ScriptDir\$script:STAKfolder" )\$defaultcpu " -fore white -notification 3
+							log-write -logstring "Copied  $( "$ScriptDir\$script:STAKfolder" )\$defaultcpu " -fore white -notification 3
 						} else {
 							log-write -logstring "Can't read $( "$ScriptDir\$script:STAKfolder\$defaultcpu" ) you need this file to fall back too, can be empty"  -fore red -notification 3
 							Pause-Then-Exit
@@ -2363,6 +2535,7 @@ Share Time:                   $script:TimeShares
 					}
 				}
 			}
+
 		}
 
 		function write-xmrstak-Pools-File {
@@ -2467,18 +2640,18 @@ Share Time:                   $script:TimeShares
 			}
 
 			#Display critical settings Variable
-			$settingsToScreen = "`n"
-			$settingsToScreen += "Displaying Startup Settings `n"
+			$settingsToScreen = @{}
+			if ( $CardResetEnabled ) { $settingsToScreen += @{ "Reset Cards enabled" = $CardResetEnabled } }
+			if ( $ResetCardOnStartup ) { $settingsToScreen += @{ "Reset Cards on startup" = $ResetCardOnStartup } }
+			if ( $script:TempWatch ) { $settingsToScreen += @{ "TempWatch enabled" = $script:TempWatch } }
+			if ( $killStakOnMaxTemp ) { $settingsToScreen += @{ "killStakOnMaxTemp" = $killStakOnMaxTemp } }
+			if ( $TEMPerMaxTemp ) { $settingsToScreen += @{ "TEMPerMaxTemp" = $TEMPerMaxTemp } }
+			if ( $profitSwitching ) { $settingsToScreen += @{ "profitSwitching" = $profitSwitching } }
+			if ( $profitLiveCheckingEnabled ) { $settingsToScreen += @{ "profitLiveCheckingEnabled" = $profitLiveCheckingEnabled } }
+			if ( $profitKillRunningStak ) { $settingsToScreen += @{ "profitKillRunningStak" = $profitKillRunningStak } }
+			if ( $profitSwitchPercentage ) { $settingsToScreen += @{ "profitSwitchPercentage" = $profitSwitchPercentage } }
 
-			# Add settings params to output
-			if ( $rebootEnabled )       { $settingsToScreen += "Reboot enabled:             $rebootEnabled `n" }
-			if ( $CardResetEnabled )    { $settingsToScreen += "Reset Cards enabled:        $CardResetEnabled `n" }
-			if ( $ResetCardOnStartup )  { $settingsToScreen += "Reset Cards on startup:     $ResetCardOnStartup `n" }
-			if ( $profitSwitching )     { $settingsToScreen += "Profit Switching enabled:   $profitSwitching `n" }
-			if ( $script:TempWatch )    { $settingsToScreen += "TempWatch enabled:          $script:TempWatch `n" }
-			if ( $killStakOnMaxTemp )   { $settingsToScreen += "killStakOnMaxTemp:          $killStakOnMaxTemp `n" }
-			if ( $TEMPerMaxTemp )       { $settingsToScreen += "TEMPerMaxTemp:              $TEMPerMaxTemp `n" }
-			Log-Write -logstring $settingsToScreen -fore 'White' -notification 1 -linefeed # Display settings
+			Log-Write -logstring "Displaying Startup Settings `n$(($settingsToScreen.NameSort()).ToDisplayString())" -fore 'White' -notification 1 -linefeed # Display settings
 
 			write-host "You have $sleeptime seconds before we start next run" -fore Green
 			Start-Sleep -Seconds $sleeptime
@@ -2502,7 +2675,10 @@ Share Time:                   $script:TimeShares
 		$running = $true
 
 	} while ( $active -eq $true ) # Used to exit script from anywhwere in code, ignored in fatal driver error
-
+} catch {
+$Error
+start-sleep -s 60
+}
 } # End of Run-Miner Function
 
 # Runtime Variables

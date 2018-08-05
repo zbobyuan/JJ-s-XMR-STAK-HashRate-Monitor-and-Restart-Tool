@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+docker build -t monitor .
+
 docker run -d \
   --name docker-influxdb-grafana \
   -p 3003:3003 \

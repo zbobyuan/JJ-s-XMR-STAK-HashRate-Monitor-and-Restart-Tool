@@ -1,3 +1,16 @@
+Version 4.4.0
+Release Date 2018-08-05
+
+Changes
+		Live profit checking with option to switch coins
+		New settings with defaults
+		    profitLiveCheckingEnabled = True
+		    profitKillRunningStak = False
+    		profitSwitchPercentage = 5
+    		ProfitCheckMinutes = 30
+        Updated grafana start script to build image locally
+
+
 Version 4.3.16
 Release Date 2018-07-31
 
