@@ -656,14 +656,14 @@ Function Run-Miner {
 		if ( $inifilevalues.profitLiveCheckingEnabled ) {
 			[string] $profitLiveCheckingEnabled = $inifilevalues.profitLiveCheckingEnabled
 		} else {
-			$profitLiveCheckingEnabled = False
+			$profitLiveCheckingEnabled = 'False'
 		}
 
 		# Kill STAK to switch coins
 		if ( $inifilevalues.profitKillRunningStak ) {
 			[string] $profitKillRunningStak = $inifilevalues.profitKillRunningStak
 		} else {
-			$profitKillRunningStak = False
+			$profitKillRunningStak = 'False'
 		}
 
 		# Minimum extra profit before switching coins
