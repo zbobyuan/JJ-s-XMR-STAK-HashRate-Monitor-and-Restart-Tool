@@ -2,6 +2,13 @@ Version 4.4.0
 Release Date 2018-08-05
 
 Changes
+        Bugfix: If liveprofitswitching enabled and profitswitching disabled caused error
+        Updated grafana startup script to include a build statement
+
+Version 4.4.0
+Release Date 2018-08-05
+
+Changes
 		Live profit checking with option to switch coins
 		New settings with defaults
 		    profitLiveCheckingEnabled = True

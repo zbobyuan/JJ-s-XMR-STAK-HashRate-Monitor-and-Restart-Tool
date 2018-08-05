@@ -1759,7 +1759,7 @@ Function Run-Miner {
 			write-host "`n"
 			$elapsedTimer.Stop()
 			check-room-temps
-			if ( $profitSwitching -eq 'True' ) {
+			if (( $profitSwitching -eq 'True' ) -and (read-Pools-File)) {
 				log-write -logstring "Profit switching enabled" -fore green -notification 1
 				if (!(read-Pools-File )) {
 					log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
@@ -1802,7 +1802,7 @@ Function Run-Miner {
 				set-STAKVars # Set  environment variables
 				start-Mining # Start mining software
 			} else {
-				if ( $profitLiveCheckingEnabled -eq 'True' ) {
+				if (( $profitLiveCheckingEnabled -eq 'True' ) -and ($profitSwitching -eq 'True')) {
 					refreshSTAK
 					foreach ( $pool in $script:PoolsList.Keys ) {
 						if (($script:PoolsList[$pool]).address.$script:ConnectedPool){
@@ -2010,7 +2010,7 @@ Function Run-Miner {
 				grafana
 				$timer = ($timer + $sleeptime )
 				$runTime = ($timer )
-				if ( $profitLiveCheckingEnabled -eq 'True' ) { check-current-profit }
+				if (( $profitLiveCheckingEnabled -eq 'True' ) -and ($profitSwitching -eq 'True')) { check-current-profit }
 				Start-Sleep -Seconds $sleeptime
 			} while ($script:currHash -gt $script:minhashrate )
 
