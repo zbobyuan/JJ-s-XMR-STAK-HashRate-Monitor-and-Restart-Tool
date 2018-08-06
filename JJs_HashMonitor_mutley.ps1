@@ -2428,7 +2428,7 @@ Function Run-Miner {
 				check-Profit-Stats $script:PoolsList.Keys $script:minhashrate -Silent
 				$bestCoinNow = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
 
-				write-verbose "`n$(($script:pools.ValueSort()).TodisplayString())" #-verbose 
+				write-verbose "`n$(($script:pools.ValueSort()).TodisplayString())" #-verbose
 				$diff = ($bestCoinNow.value - $lastcoin.value )
 				$lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 )
 
@@ -2439,7 +2439,7 @@ Function Run-Miner {
 				if ( $lossPercentage -ge $profitSwitchPercentage ) {
 					log-write -logstring "Could earn up to $lossPercentage % more mining $( $bestCoinNow.name )  " -notification 3 -fore Yellow
 					if ( $profitKillRunningStak -eq 'True' ) {
-						log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script in 30 seconds " -notification 1 -fore Yellow
+						log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script in 30 seconds to mine $($bestCoinNow.Name) " -notification 1 -fore Yellow
 						write-verbose "$(($script:pools.ValueSort()).ToDisplayString()) `n $(($script:pools.ValueSort()).ToDisplayString())" #-verbose
 						start-sleep -s 30
 						kill-Process -STAKexe ($STAKexe)
