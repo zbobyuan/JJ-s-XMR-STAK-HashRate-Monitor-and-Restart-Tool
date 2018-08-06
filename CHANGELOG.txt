@@ -1,9 +1,12 @@
-Version 4.4.0
+Version 4.4.1
 Release Date 2018-08-05
 
 Changes
         Bugfix: If liveprofitswitching enabled and profitswitching disabled caused error
+        Bugfix: Changed default error behaviour to silentyContinue
+        Bugfix: Updated temp sensor error status to disable in the event of corrupt file
         Updated grafana startup script to include a build statement
+        added catch clauses for nanopool stats
 
 Version 4.4.0
 Release Date 2018-08-05

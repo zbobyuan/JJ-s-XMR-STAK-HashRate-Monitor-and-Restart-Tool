@@ -2,14 +2,73 @@
 Clear-Host
 $startattempt = 0
 
+# Add display to string method to hashtable type
+Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ToDisplayString `
+        -Value {
+	$maxLength = ($this.keys.length | measure -Maximum ).Maximum
+	$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
+		$v = $this[ $key ]; $stringLength = [int] $key.length
+		$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
+		if ( $key -match "\s" ) {
+			$hashstr += "$key" + $spacing + $v + "`n"
+
+		} else {
+			$hashstr += "$key" + $spacing + $v + "`n"
+		}
+	}
+	return $hashstr
+}
+
+# Add display to string method to ordered hashtable type
+Update-TypeData -TypeName System.Collections.Specialized.OrderedDictionary -MemberType ScriptMethod -MemberName ToDisplayString `
+        -Value {
+	$maxLength = ($this.keys.length | measure -Maximum ).Maximum
+	$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
+		$v = $this[ $key ]; $stringLength = [int] $key.length
+		$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
+		if ( $key -match "\s" ) {
+			$hashstr += "$key" + $spacing + $v + "`n"
+
+		} else {
+			$hashstr += "$key" + $spacing + $v + "`n"
+		}
+	}
+	return $hashstr
+}
+
+# Add sort to hashtable type by name
+Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName NameSort `
+        -Value {
+	$sorted = ($this.GetEnumerator() | Sort-Object Key )
+	$ht = [ordered]@{}
+	foreach ($key in $sorted){
+		#write-host "key $($key.Key) : Value $($key.Value)"
+		$ht.Add($key.Key, $key.Value )
+	}
+	return $ht
+}
+
+# Add sort to hashtable type by value
+Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ValueSort `
+        -Value {
+	$sorted = ($this.GetEnumerator() | Sort-Object Value -Descending)
+	$ht = [ordered]@{}
+	foreach ($key in $sorted){
+		#write-host "key $($key.Key) : Value $($key.Value)"
+		$ht.Add($key.Key, $key.Value )
+	}
+	return $ht
+}
+
 
 Function Run-Miner {
 	try {
 	do {
-		$ver = '4.4.0'
+		$ver = '4.4.1'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
-		$ErrorActionPreference = 'Inquire'
+		$ErrorActionPreference = 'silentlyContinue'
+		#$ErrorActionPreference = 'inquire' 
 		Push-Location -Path $PSScriptRoot
 		$Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool, Reworked  by Mutl3y v$ver"
 		$Host.UI.RawUI.BackgroundColor = 'Black'
@@ -49,69 +108,18 @@ Function Run-Miner {
 		$poolsdottext = "pools.txt"
 		$poolsfile = 'pools.json'
 		$script:displayOutput2 = [ordered]@{}
+		$script:balance = $NUL
+		$script:btcprice = $NUL
+		$script:coins = $NUL
+		$script:dollars = $NUL
+		$script:avghash1hr = $NUL
+
 
 		$stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
 		$runTime = 0
 
 		########## END STATIC Variables - MAKE NO CHANGES ABOVE THIS LINE #######
 
-		# Add display to string method to hashtable type
-		Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ToDisplayString `
-        -Value {
-			$maxLength = ($this.keys.length | measure -Maximum ).Maximum
-			$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
-				$v = $this[ $key ]; $stringLength = [int] $key.length
-				$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
-				if ( $key -match "\s" ) {
-					$hashstr += "$key" + $spacing + $v + "`n"
-
-				} else {
-					$hashstr += "$key" + $spacing + $v + "`n"
-				}
-			}
-			return $hashstr
-		}
-
-		# Add display to string method to ordered hashtable type
-		Update-TypeData -TypeName System.Collections.Specialized.OrderedDictionary -MemberType ScriptMethod -MemberName ToDisplayString `
-        -Value {
-			$maxLength = ($this.keys.length | measure -Maximum ).Maximum
-			$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
-				$v = $this[ $key ]; $stringLength = [int] $key.length
-				$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
-				if ( $key -match "\s" ) {
-					$hashstr += "$key" + $spacing + $v + "`n"
-
-				} else {
-					$hashstr += "$key" + $spacing + $v + "`n"
-				}
-			}
-			return $hashstr
-		}
-
-		# Add sort to hashtable type by name
-		Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName NameSort `
-        -Value {
-			$sorted = ($this.GetEnumerator() | Sort-Object Key )
-			$ht = [ordered]@{}
-			foreach ($key in $sorted){
-				#write-host "key $($key.Key) : Value $($key.Value)"
-				$ht.Add($key.Key, $key.Value )
-			}
-			return $ht
-		}
-
-		# Add sort to hashtable type by value
-		Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ValueSort `
-        -Value {
-			$sorted = ($this.GetEnumerator() | Sort-Object Value -Descending)
-			$ht = [ordered]@{}
-			foreach ($key in $sorted){
-				#write-host "key $($key.Key) : Value $($key.Value)"
-				$ht.Add($key.Key, $key.Value )
-			}
-			return $ht
-		}
 
 		#########################################################################
 		# Set the REQUIRED variables for your Mining Configuration              #
@@ -1336,37 +1344,44 @@ Function Run-Miner {
 		}
 
 		function get-room-temps {
-			if ( $sensorDataFile ) {
-				write-verbose "get-room-temps: Sensorfile defined $sensorDataFile"
-				if ( test-path -path $sensorDataFile ) {
-					$script:sensorData = 'True'
-					write-verbose "get-room-temps: Sensorfile exists $sensorDataFile"
-					if ( $script:truncateSensorFile -eq 'True' ) {
-						truncate-sensorfile
-						$script:truncateSensorFile = 'False'
-					}
-					$script:lastRoomTemp = (get-content -path $sensorDataFile ) -replace ('â|„|ƒ' ) |
-					                       out-string |
-					                       ConvertFrom-Csv |
-					                       Select-Object -Last 1
-					write-verbose "get-room-temps: Last Time $( $script:lastRoomTemp.Time )"
-					write-verbose "get-room-temps: Last Temp $( $script:lastRoomTemp.$TEMPerSensorLocation )"
+			IF ( $script:TempWatch -Eq 'True' ) {
+				if ( $sensorDataFile ) {
+					write-verbose "get-room-temps: Sensorfile defined $sensorDataFile"
+					if ( test-path -path $sensorDataFile ) {
+						$script:sensorData = 'True'
+						write-verbose "get-room-temps: Sensorfile exists $sensorDataFile"
+						if ( $script:truncateSensorFile -eq 'True' ) {
+							truncate-sensorfile
+							$script:truncateSensorFile = 'False'
+						}
+						$script:lastRoomTemp = (get-content -path $sensorDataFile ) -replace ('â|„|ƒ' ) |
+						                       out-string |
+						                       ConvertFrom-Csv |
+						                       Select-Object -Last 1
+						write-verbose "get-room-temps: Last Time $( $script:lastRoomTemp.Time )"
+						write-verbose "get-room-temps: Last Temp $( $script:lastRoomTemp.$TEMPerSensorLocation )"
 
-					$script:timeDrift = [int] (new-timespan -Start ([DateTime] $script:lastRoomTemp.Time ) -End (Get-Date ) ).TotalMinutes
+						if ( $script:lastRoomTemp ) {
+							$script:timeDrift = [int] (new-timespan -Start ([DateTime] $script:lastRoomTemp.Time ) -End (Get-Date ) ).TotalMinutes
 
-					if ( $TEMPerValidMinutes -gt $script:timeDrift ) {
-						write-verbose "Valid Time found $( $script:lastRoomTemp.Time )"
-						$script:validSensorTime = 'True'
-					} else {
-						write-verbose "Invalid Reading, Too much time drift $script:timeDrift "
-						$script:validSensorTime = 'False'
-						$script:lastRoomTemp = $null
-						write-verbose "get-room-temps: Time Drift in minutes $script:timeDrift"
+							if ( $TEMPerValidMinutes -gt $script:timeDrift ) {
+								write-verbose "Valid Time found $( $script:lastRoomTemp.Time )"
+								$script:validSensorTime = 'True'
+							} else {
+								write-verbose "Invalid Reading, Too much time drift $script:timeDrift "
+								$script:validSensorTime = 'False'
+								$script:lastRoomTemp = $null
+								write-verbose "get-room-temps: Time Drift in minutes $script:timeDrift"
+							}
+						} else {
+							log-write -logstring "TempWatch = True but file $sensorDataFile is not found or unreadable" -fore red -notification 1 -linefeed
+							$script:TempWatch = 'False'
+
+						}
 					}
 				}
 			}
 		}
-
 
 
 		##################################
@@ -2167,21 +2182,27 @@ Function Run-Miner {
 								log-write -logstring "Not using Nanopool, you are using $pool, disabling stats" -fore red -notification 2
 								$script:enableNanopool = 'False'
 							} else {
-								[Decimal] $script:balance = [ math ]::Round( (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,
-								                                             4 )
-								[Decimal] $script:btcprice = [Double] ((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
-								[int] $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker ).data.'h1'
+								try {
+									[Decimal] $script:balance = [ math ]::Round( (Get-Nanopool-Metric -coin $script:coin -op balance -wallet $script:adr ).data,
+									                                             4 )
+									[Decimal] $script:btcprice = [Double] ((Get-Nanopool-Metric -coin $script:coin -op prices ).data.'price_btc' )
+									[int] $script:avghash1hr = (Get-Nanopool-Metric -coin $script:coin -op avghashrateworker -wallet $script:adr -worker $script:worker ).data.'h1'
 
-								$profitData = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash ).data
-								[decimal] $script:coins = [ math ]::Round( $profitData.$coinStats.'coins', 8 )
-								[decimal] $script:dollars = [ math ]::Round( $profitData.$coinStats.'dollars', 4 )
+									$profitData = (Get-Nanopool-Metric -coin $script:coin -op approximated_earnings -hashrate $script:currHash ).data
+									if ($profitData.$coinStats.'coins') {[decimal] $script:coins = [ math ]::Round( $profitData.$coinStats.'coins', 8 )}
+									if ($profitData.$coinStats.'dollars' ) {[decimal] $script:dollars = [ math ]::Round( $profitData.$coinStats.'dollars', 4 )}
 
-								$Metrics.add( 'balance', $script:balance )
-								$Metrics.add( 'btcprice', $script:btcprice )
-								$Metrics.add( "estCoin$coinStats", $script:coins )
-								$Metrics.add( "estDollar$coinStats", $script:dollars )
-								$Metrics.add( 'avghash1hr', $script:avghash1hr )
-								$script:nanopoolLastUpdate = $runTime
+									$Metrics.add( 'balance', $script:balance )
+									$Metrics.add( 'btcprice', $script:btcprice )
+									$Metrics.add( "estCoin$coinStats", $script:coins )
+									$Metrics.add( "estDollar$coinStats", $script:dollars )
+									$Metrics.add( 'avghash1hr', $script:avghash1hr )
+									$script:nanopoolLastUpdate = $runTime
+
+								}
+								catch {
+									log-Write -logstring "Error converting stats $($profitData.$coinStats.ToDisplayString())" -fore red -notification 3
+								}
 							}
 						}
 						catch {
@@ -2197,15 +2218,23 @@ Function Run-Miner {
 		}
 
 		Function show-Coin-Info {
-			$coininfo = [ ordered ]@{
-				'Balance' = $script:balance
-				'H/R' = $script:avghash1hr
-				'BTC' = $script:btcprice
-				"$script:coin" = $script:coins
-				"BTC per $coinStats" = ( $script:coins * $script:btcprice )
-				"Dollars" = $script:dollars
+			try {
+				$coininfo = [ ordered ]@{
+					'Balance' = $script:balance
+					'H/R' = $script:avghash1hr
+					'BTC' = $script:btcprice
+					"$script:coin" = $script:coins
+					"BTC per $coinStats" = ( $script:coins * $script:btcprice )
+					"Dollars" = $script:dollars
+				}
+				return $coininfo
+
 			}
-		return $coininfo
+			catch {
+				log-write -logstring "Error converting stats for display" -fore red -notification 3
+				return $null
+			}
+
 		}
 
 			Function check-Influx {
@@ -2610,7 +2639,7 @@ Function Run-Miner {
 					write-host "Truncating $sensorDataFile to last 6 lines" -fore green
 					# Truncating sensor file
 					$rawTempFile = Get-Content -path $sensorDataFile -last 6
-					$rawTempFile | set-content -path $sensorDataFile
+					$rawTempFile | set-content -path $sensorDataFile -Force
 					start-sleep -s 2
 				}
 			}
