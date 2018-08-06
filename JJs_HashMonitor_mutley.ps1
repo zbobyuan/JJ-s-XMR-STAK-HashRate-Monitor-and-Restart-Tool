@@ -68,7 +68,7 @@ Function Run-Miner {
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		$ErrorActionPreference = 'silentlyContinue'
-		#$ErrorActionPreference = 'inquire' 
+		#$ErrorActionPreference = 'inquire'
 		Push-Location -Path $PSScriptRoot
 		$Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool, Reworked  by Mutl3y v$ver"
 		$Host.UI.RawUI.BackgroundColor = 'Black'
@@ -750,15 +750,15 @@ Function Run-Miner {
 			               ConvertFrom-StringData -StringData { ($_ -replace ':', '=' -replace '"|,' ) }
 		}
 
-		# Add support for room temp sensor csv, time and reading format with headers
-		# Time  Reading
-		if ( test-path -path "$PSScriptRoot\TEMPerX1.csv" ) {
-			$sensorDataFile = "$PSScriptRoot\TEMPerX1.csv"
-		} ElseIf (test-path -path "$PSScriptRoot\sensor-data\TEMPerX1.csv") {
-			$sensorDataFile = "$PSScriptRoot\sensor-data\TEMPerX1.csv"
-		} ElseIf (Test-Path -Path ".\sensor-data\TEMPerX1.csv") {
-			$sensorDataFile = ".\sensor-data\TEMPerX1.csv"
-		}
+#		# Add support for room temp sensor csv, time and reading format with headers
+#		# Time  Reading
+#		if ( test-path -path "$PSScriptRoot\TEMPerX1.csv" ) {
+#			$sensorDataFile = "$PSScriptRoot\TEMPerX1.csv"
+#		} ElseIf (test-path -path "$PSScriptRoot\sensor-data\TEMPerX1.csv") {
+#			$sensorDataFile = "$PSScriptRoot\sensor-data\TEMPerX1.csv"
+#		} ElseIf (Test-Path -Path ".\sensor-data\TEMPerX1.csv") {
+#			$sensorDataFile = ".\sensor-data\TEMPerX1.csv"
+#		}
 
 
 		##########################################################################
@@ -1082,7 +1082,7 @@ Function Run-Miner {
 					log-write -logstring "Checking Room Temp is below $TEMPerMaxTemp c" -fore yellow -notification 2 -linefeed
 					get-room-temps
 					if ( $script:validSensorTime -eq 'True' ) {
-						log-write -logstring "Valid sensor reading within $TEMPerValidMinutes minutes found`t $( $script:lastRoomTemp.Time )" -fore yellow -notification 5
+						log-write -logstring "Valid sensor reading within $TEMPerValidMinutes minutes found: $( $script:lastRoomTemp.Time )" -fore yellow -notification 5
 						$validTime = 'True'
 					} else {
 						log-write -logstring "Invalid Reading, Too much time drift $script:timeDrift minutes, Is your sensor OK ?" -fore red -notification 1
@@ -1090,7 +1090,6 @@ Function Run-Miner {
 					}
 
 					$lt = ($script:lastRoomTemp.$TEMPerSensorLocation )
-
 					$lti = ($script:lastRoomTemp.Time )
 
 					$timer = [ Diagnostics.Stopwatch ]::StartNew()
@@ -2369,7 +2368,7 @@ Function Run-Miner {
 
 			#Read from profit.json
 			$rawdata = (Get-Content -RAW -Path $path | Out-String | ConvertFrom-Json )
-			$script:pools = @{}
+			$script:pools = @{ } # Clean current hashtable
 			#Add each coin to an ordered list, Storing each coin's name as the value so item 0 is always best coin
 			foreach ( $coin in $rawdata.rewards ) {
 				#write-host $coin.ticker_symbol $coin.reward_24h.btc
@@ -2399,12 +2398,12 @@ Function Run-Miner {
 			if ( $script:pools ) {
 				$bestcoin = ($bestcoins.ValueSort()).GetEnumerator() | Select-Object -first 1
 				$ourcoin = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
-				$profitLoss = $bestcoin.Value - $ourcoin.Value
+				$profitLoss = $bestcoin.value - $ourcoin.value
 				if (!($silent)) {
 					log-write -logstring "Coins checked,  We are mining $( $ourcoin.Name ) " -fore green -notification 1
 					write-host "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow
 					write-host ($script:pools.ValueSort()).ToDisplayString()
-					log-write -logstring   "Difference in Daily earnings:  $profitLoss BTC Per day Mining $( $bestcoin.Name )" -fore yellow -notification 3
+					log-write -logstring   "Difference in Daily earnings: $profitLoss BTC Per day Mining $( $bestcoin.Name )" -fore yellow -notification 3
 				}
 
 					# Export coin to mine to script
@@ -2419,37 +2418,41 @@ Function Run-Miner {
 			$now = (get-date )
 			$nextCheck = ($script:profitCheckDateTime).AddMinutes($ProfitCheckMinutes)
 			if ((  $now -ge $nextCheck ) -or $force) {
-				log-write -logstring "Profit stats checking triggered " -notification 3 -fore yellow
+				log-write -logstring "Live Profit stat check triggered " -notification 3 -fore yellow
 				$script:profitCheckDateTime = (Get-Date)
 				# Save current state
 				$currentSave = $script:pools
 				$lastcoin = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
-				$script:pools = @{ } # Clean current hashtable
 
 				# Update stats
 				check-Profit-Stats $script:PoolsList.Keys $script:minhashrate -Silent
 				$bestCoinNow = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
+
+				write-verbose "`n$(($script:pools.ValueSort()).TodisplayString())" #-verbose 
 				$diff = ($bestCoinNow.value - $lastcoin.value )
 				$lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 )
+
+
 
 				function restore-Coinstats { $script:pools = $currentSave } # Restore saved stats
 
 				if ( $lossPercentage -ge $profitSwitchPercentage ) {
-					log-write -logstring "Could earn up to $lossPercentage % more mining $( $lastcoin.name ) BTC " -notification 3 -fore Yellow
+					log-write -logstring "Could earn up to $lossPercentage % more mining $( $bestCoinNow.name )  " -notification 3 -fore Yellow
 					if ( $profitKillRunningStak -eq 'True' ) {
-						log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script" -notification 1 -fore Yellow
-						kill-Process -STAKexe ($STAKexe)
+						log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script in 30 seconds " -notification 1 -fore Yellow
+						write-verbose "$(($script:pools.ValueSort()).ToDisplayString()) `n $(($script:pools.ValueSort()).ToDisplayString())" #-verbose
 						start-sleep -s 30
+						kill-Process -STAKexe ($STAKexe)
 						call-self
 					} else {
 						log-write -logstring "Live Profit Switching enabled but profitKillRunningStak is not enabled continuing to mine $( $lastcoin.name )" -notification 1 -fore Red
 						restore-Coinstats
 					}
 				} else {
-					if ($lastcoin.Name -eq $bestcoin.Name){
-						log-write -logstring "Continuing to mine $($lastcoin.Name)" -notification 3 -fore Yellow
+					if ($lastcoin.Name -eq $bestCoinNow.Name){
+						log-write -logstring "Already mining our top coin: $($lastcoin.Name)" -notification 3 -fore Yellow
 					}	else {
-					log-write -logstring "Could not earn more than $profitSwitchPercentage % by switching coins ($lossPercentage), continuing to mine $($lastcoin.Name) Losing BTC $diff per day" -notification 3 -fore Yellow
+					log-write -logstring "Could not earn more than $profitSwitchPercentage % by switching coins ($lossPercentage), continuing to mine $($lastcoin.Name) $diff BTC per day" -notification 3 -fore Yellow
 					}
 					restore-Coinstats
 					Start-Sleep -s $sleeptime
@@ -2639,7 +2642,11 @@ Function Run-Miner {
 					write-host "Truncating $sensorDataFile to last 6 lines" -fore green
 					# Truncating sensor file
 					$rawTempFile = Get-Content -path $sensorDataFile -last 6
-					$rawTempFile | set-content -path $sensorDataFile -Force
+					try { $null = $rawTempFile | set-content -path $sensorDataFile }
+					catch {
+						start-sleep -s  1
+						$null = $rawTempFile | set-content -path $sensorDataFile
+					}
 					start-sleep -s 2
 				}
 			}
