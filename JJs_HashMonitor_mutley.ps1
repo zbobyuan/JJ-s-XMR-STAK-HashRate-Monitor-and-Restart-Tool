@@ -113,7 +113,7 @@ Function Run-Miner {
 		$script:coins = $NUL
 		$script:dollars = $NUL
 		$script:avghash1hr = $NUL
-
+		$script:bestcoins = {}
 
 		$stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
 		$runTime = 0
@@ -2364,7 +2364,7 @@ Function Run-Miner {
 				$path = "$ScriptDir\profit.json"
 				$data = @{ }
 				if ( $coins ) { $supportedCoins = $coins.ToUpper() }
-				$bestcoins = @{ }
+				$script:bestcoins = @{ }
 
 				function get-stats {
 					try {
@@ -2391,10 +2391,10 @@ Function Run-Miner {
 				#Read from profit.json
 				$rawdata = (Get-Content -RAW -Path $path | Out-String | ConvertFrom-Json )
 				$script:pools = @{ } # Clean current hashtable
-				#Add each coin to an ordered list, Storing each coin's name as the value so item 0 is always best coin
+				#Add each coin to an ordered list
 				foreach ( $coin in $rawdata.rewards ) {
 					#write-host $coin.ticker_symbol $coin.reward_24h.btc
-					if ( ($coin.ticker_symbol ) |Where-Object ({ $_ -in $supportedCoins } ) ) {
+					if ( ($coin.ticker_symbol ) | Where-Object ({ $_ -in $supportedCoins } ) ) {
 						if ( ($coin.algorithm ) -eq 'cryptonight-heavy' ) {
 							$script:pools.Add( $coin.ticker_symbol,
 							                   [decimal][ System.Math ]::Round( (($coin.reward_24h.btc / ($rawdata.'cryptonight-heavy_factor' ) ) * $profitHeavyAdjustment ),
@@ -2405,11 +2405,11 @@ Function Run-Miner {
 						}
 					} else {
 						if ( ($coin.algorithm ) -eq 'cryptonight-heavy' ) {
-							$bestcoins.Add( $coin.ticker_symbol,
+							$script:bestcoins.Add( $coin.ticker_symbol,
 							                [decimal][ System.Math ]::Round( (($coin.reward_24h.btc / ($rawdata.'cryptonight-heavy_factor' ) ) * $profitHeavyAdjustment ),
 							                                                 10 ) )
 						} else {
-							$bestcoins.Add( $coin.ticker_symbol,
+							$script:bestcoins.Add( $coin.ticker_symbol,
 							                [decimal][ System.Math ]::Round( $coin.reward_24h.btc, 10 ) )
 						}
 
@@ -2418,7 +2418,7 @@ Function Run-Miner {
 
 				#Check our pools
 				if ( $script:pools ) {
-					$bestcoin = ($bestcoins.ValueSort()).GetEnumerator() | Select-Object -first 1
+					$bestcoin = ($script:bestcoins.ValueSort()).GetEnumerator() | Select-Object -first 1
 					$ourcoin = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
 					$profitLoss = $bestcoin.value - $ourcoin.value
 					if (!($silent)) {
@@ -2440,46 +2440,45 @@ Function Run-Miner {
 				$now = (get-date )
 				$nextCheck = ($script:profitCheckDateTime).AddMinutes($ProfitCheckMinutes)
 				if ((  $now -ge $nextCheck ) -or $force) {
+					function restore-Coinstats { $script:pools = $currentSave } # Restore saved stats
 					log-write -logstring "Live Profit stat check triggered " -notification 3 -fore yellow
 					$script:profitCheckDateTime = (Get-Date)
 					# Save current state
-					$currentSave = $script:pools
+					$currentSave = ($script:pools)
 					$lastcoin = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
-
+					$lastCoinName = $lastcoin.Name
 					# Update stats
 					check-Profit-Stats $script:PoolsList.Keys $script:minhashrate -Silent
 					$bestCoinNow = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
 
 					write-verbose "`n$(($script:pools.ValueSort()).TodisplayString())" #-verbose
-					$diff = ($bestCoinNow.value - $lastcoin.value )
-					$lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 )
+					if ($lastcoin.Name -eq $bestCoinNow.Name) {
+						log-write -logstring "Not switching, Already mining: $($lastcoin.Name)" -notification 3 -fore Yellow
 
-
-
-					function restore-Coinstats { $script:pools = $currentSave } # Restore saved stats
-
-					if ( $lossPercentage -ge $profitSwitchPercentage ) {
-						log-write -logstring "Could earn up to $lossPercentage % more mining $( $bestCoinNow.name )  " -notification 3 -fore Yellow
-						if ( $profitKillRunningStak -eq 'True' ) {
-							log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script in 30 seconds to mine $($bestCoinNow.Name) " -notification 1 -fore Yellow
-							write-verbose "$(($script:pools.ValueSort()).ToDisplayString()) `n $(($script:pools.ValueSort()).ToDisplayString())" #-verbose
-							start-sleep -s 30
-							kill-Process -STAKexe ($STAKexe)
-							call-self
-						} else {
-							log-write -logstring "Live Profit Switching enabled but profitKillRunningStak is not enabled continuing to mine $( $lastcoin.name )" -notification 1 -fore Red
-							restore-Coinstats
-						}
 					} else {
-						if ($lastcoin.Name -eq $bestCoinNow.Name){
-							log-write -logstring "Not switching, Already mining: $($lastcoin.Name)" -notification 3 -fore Yellow
-						}	else {
-							log-write -logstring "Could not earn more than $profitSwitchPercentage % by switching coins ($lossPercentage), continuing to mine $($lastcoin.Name) $diff BTC per day" -notification 3 -fore Yellow
-						}
-						restore-Coinstats
-						Start-Sleep -s $sleeptime
+						$lastcoin.value = $script:bestcoins."$lastCoinName"
+						$diff = ($bestCoinNow.value - $lastcoin.value )
+						$lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 )
 
+
+						if ( $lossPercentage -ge $profitSwitchPercentage ) {
+							log-write -logstring "Could earn up to $lossPercentage % more mining $( $bestCoinNow.name )  " -notification 3 -fore Yellow
+							if ( $profitKillRunningStak -eq 'True' ) {
+								log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script in 30 seconds to mine $($bestCoinNow.Name) " -notification 1 -fore Yellow
+								write-verbose "$(($script:pools.ValueSort()).ToDisplayString()) `n $(($script:pools.ValueSort()).ToDisplayString())" #-verbose
+								start-sleep -s 30
+								kill-Process -STAKexe ($STAKexe)
+								call-self
+							} else {
+								log-write -logstring "Live Profit Switching enabled but profitKillRunningStak is not enabled continuing to mine $( $lastcoin.name )" -notification 1 -fore Red
+								Start-Sleep -s $sleeptime
+							}
+						} else {
+							log-write -logstring "Could not earn more than $profitSwitchPercentage % by switching coins ($lossPercentage), continuing to mine $($lastcoin.Name) $diff BTC per day" -notification 3 -fore Yellow
+							Start-Sleep -s $sleeptime
+						}
 					}
+					restore-Coinstats
 				}
 
 			}

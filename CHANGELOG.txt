@@ -4,7 +4,7 @@ Release Date 2018-08-07
 Changes
         removed redundant pools.txt content read
         added catch clauses reading config files to aid users in diagnosis of issue
-        
+        Bugfix: Corrected error where profit switching would attempt to switch to same coin
 
 Version 4.4.1
 Release Date 2018-08-06

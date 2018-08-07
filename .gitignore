@@ -66,5 +66,7 @@ fabric.properties
 /test.txt
 /diag.txt
 
-
 sensor-data/
+/scratchdir/
+
+
