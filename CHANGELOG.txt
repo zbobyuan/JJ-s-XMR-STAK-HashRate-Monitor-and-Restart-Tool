@@ -1,5 +1,14 @@
+Version 4.4.4
+Release Date 2018-08-11
+
+Changes
+        Bugfix: Fixed invalid profit percentage calculation
+        Added periodic sending of hashmonitor display toi stak as an attachment, Disabled by default
+        Added timeperiod for sending display stats to slack
+        Added colour decoration to slack attachment messages to signify type
+
 Version 4.4.3
-Release Date 2018-08-01
+Release Date 2018-08-11
 
 Changes
         Bugfix: Removed invokewebrequest for debuging that was causing script to exit

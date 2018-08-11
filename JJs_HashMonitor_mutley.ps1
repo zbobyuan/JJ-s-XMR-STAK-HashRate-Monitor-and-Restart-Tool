@@ -6,7 +6,7 @@ $startattempt = 0
 Function Run-Miner {
 	try {
 	do {
-		$ver = '4.4.3'
+		$ver = '4.4.4'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		$ErrorActionPreference = 'inquire'
@@ -56,7 +56,7 @@ Function Run-Miner {
 		$script:dollars = $NUL
 		$script:avghash1hr = $NUL
 		$script:bestcoins = {}
-
+		$script:nextSlackPeriod = (get-date)
 		$stakIP = '127.0.0.1'    # IP or hostname of the machine running STAK (ALWAYS LOCAL) Remote start/restart of the miner is UNSUPPORTED.
 		$runTime = 0
 
@@ -192,6 +192,12 @@ Function Run-Miner {
         # slackEmoji=':clap:'		# Example: :clap:. (Not Mandatory). (if slackEmoji is set, slackIconUrl will not be used)
               # Slack uses the standard emoji codes found at Emoji Cheat Sheet (https://www.webpagefx.com/tools/emoji-cheat-sheet/)
         # slackIconUrl=''			# Url for an icon to use. (Not Mandatory)
+
+		# Periodically send script display output to Slack
+		slackPeriodicReporting = True
+
+		# How often to send display to slack, minimum 5 minutes,
+		slackPeriodicMinutes = 5
 
         # Verbosoty level for Slack notification,
         # 0 to disable
@@ -555,6 +561,18 @@ Function Run-Miner {
 		}
 
 
+		if ( $inifilevalues.slackPeriodicReporting ) {
+			if ($inifilevalues.slackPeriodicReporting -eq 'True') {$slackPeriodicReporting = $true} else {$slackPeriodicReporting = $false}
+			$slackPeriodicReporting = $inifilevalues.slackPeriodicReporting
+		} Else {
+			$slackPeriodicReporting = $false
+		}
+
+		if ( $inifilevalues.slackPeriodicMinutes ) {
+			$slackPeriodicMinutes = $inifilevalues.slackPeriodicMinutes
+		} else { $slackPeriodicMinutes = 5 }
+
+
 		# alertLevel=''			# Verbosity of notifications, Defaults to 1
 		if ( $inifilevalues.alertLevel ) {
 			$alertLevel = $inifilevalues.alertLevel
@@ -731,7 +749,8 @@ Function Run-Miner {
 			    [ Parameter ( Mandatory, HelpMessage = 'Provide colour to display to screen' ) ][ string ]$fore,
 				[ Parameter ( Mandatory = $true ) ][ int ] $notification,
 				[ switch ]$linefeed,
-				[string]$attachment
+				[string]$attachment,
+				[string]$type
 
 			)
 			$timeStamp = (get-Date -format r )
@@ -753,7 +772,7 @@ Function Run-Miner {
 					Send-MailMessage -From $gUsername -Subject $msgText -To $smsAddress -UseSSL -Port 587 -SmtpServer smtp.gmail.com -Credential $gCredentials
 				}
 				If ( $slackUrl ) {
-					Send-SlackMessage $logstring, $slackUrl, $slackUsername, $slackChannel, $slackEmoji, $slackIconUrl, $attachment
+					Send-SlackMessage $logstring, $slackUrl, $slackUsername, $slackChannel, $slackEmoji, $slackIconUrl, $attachment, $type
 				}
 			}
 		}
@@ -905,7 +924,7 @@ Function Run-Miner {
 					}
 					Catch {
 						Write-Verbose -Message ("{0}`t Nanopool issue with API call `n{1}/{2}/{3} `n{4}" -f $timeStamp, $url, $coin, $stat, $rawdata ) #-Verbose
-						log-write -logstring "Nanopool api error, Disabling Nanopool stats `n $( $Error[ 0 ] )" -fore 0 -notification 1
+						log-write -logstring "Nanopool api error, Disabling Nanopool stats" -fore 0 -notification 1 -type Error -attachment $Error[ 0 ]
 						$script:enableNanopool = 'False'
 					}
 				}
@@ -916,40 +935,69 @@ Function Run-Miner {
 				}
 			}
 
-
 		function Send-SlackMessage {
-			$text = "$slackUsername`t $logstring"
-
-			if (( $attachment ) -or ($alertLevel -ge 4)) {
-
-				if ($attachment) {
-					write-host "attachment"
-					$attachments = @()
-					$attachments += (@{
-						"text" = $attachment
-					} )
-				}
-
-				if (($debug) -or ($alertLevel -ge 4)) {
-					write-host "debug"
-					$attachments = @()
-					$attachments += (@{
-							"text" = ($inifilevalues.nameSort()).toDisplayString()
-						} )
-
+				$text = "$slackUsername`t $logstring"
+				switch ( $type ) {
+					'Error' {
+						$slackMessageType = ':sos:'
+						$slackColour = "#f4241d"
+						$title = 'Error Message Attached'
+					}
+					'Warn' {
+						$slackMessageType = ':question:'
+						$slackColour = "#f49e1d"
+						$title = 'Warning message attached'
 					}
 
-					$attachmentSlack = @{ "attachments" = $attachments }
-					#$attachment | ConvertTo-Json
+					'Info' {
+					$slackMessageType = ':information_source:'
+					$slackColour = "#201df4"
+					$title = 'Info message attached'
+					}
 
-					$slackBody = @{ "text" = $text; channel = $slackChannel; 'username' = $slackUsername; 'icon_emoji' = $slackEmoji; 'icon_url' = $slackIconUrl; "attachments" = $attachments } |
-					             ConvertTo-Json
+					Default {
+						$slackMessageType = $slackEmoji
+						$slackColour = "#41f41d"
+						$title = 'Message attached'
+					}
+				}
+
+			if ( ( $attachment ) -or ($alertLevel -ge 5 ) ) {
+
+				if ( $attachment ) {
+					write-verbose "adding attachment to Slack message"
+					$attachments = @()
+					$attachments += (@{
+						fallback = $logstring
+						color = $slackColour
+						title = $title
+						#image_url = "http://my-website.com/path/to/image.jpg"
+						#thumb_url = "http://example.com/path/to/thumb.png"
+						ts = (New-TimeSpan -Start (Get-Date "01/01/1970" ) -End (Get-Date ) ).TotalSeconds
+						text = $attachment
+					})
+				}
 
 
-				} else {
+				if ( ($debug ) -or ($alertLevel -ge 5 ) ) {
+					write-verbose "Adding inifile variables to Slack message"
+					$attachments = @()
+					$attachments += (@{
+						"text" = ($inifilevalues.nameSort() ).toDisplayString()
+					} )
+
+				}
+
+				$attachmentSlack = @{ "attachments" = $attachments }
+				$slackBody = @{ "text" = $text; channel = $slackChannel; 'username' = $slackUsername; 'icon_emoji' = $slackMessageType; 'icon_url' = $slackIconUrl; "attachments" = $attachments } |
+				             ConvertTo-Json
+
+
+			} else {
 				$slackBody = @{ "text" = $text; channel = $slackChannel; 'username' = $slackUsername; 'icon_emoji' = $slackEmoji; 'icon_url' = $slackIconUrl } |
 				             ConvertTo-Json
 			}
+
 			try {
 				$null = Invoke-WebRequest -UseBasicParsing -Method Post -Uri $slackUrl -Body $slackBody
 			}
@@ -987,11 +1035,11 @@ Function Run-Miner {
 							exit $process.ExitCode
 						}
 						catch {
-							log-Write -logstring 'Failed to elevate to administrator' -fore Red -notification 0
+							log-Write -logstring 'Failed to elevate to administrator' -fore Red -notification 0 -type 'Error'
 							EXIT
 						}
 					} else {
-						log-Write -logstring 'You need to run this as admin for xmrSTAK tomine efficent blocks' -fore Red -notification 0
+						log-Write -logstring 'You need to run this as admin for xmrSTAK to mine efficent blocks' -fore Red -notification 0
 						EXIT
 					}
 
@@ -1416,7 +1464,18 @@ Function Run-Miner {
 
 				Clear-Host
 				Write-Host -fore Green $script:displayOutput2.ToDisplayString()
+				if ($slackPeriodicReporting) {display-to-slack}
 			}
+
+		function display-to-slack {
+			$now = (get-date )
+			#$nextCheck = ($script:nextSlackPeriod ).AddMinutes( $slackPeriodicMinutes )
+
+			if ( $now -ge $script:nextSlackPeriod ) {
+				log-write -logstring "Live display stats to Slack " -notification 1 -fore 0 -attachment ($script:displayOutput2).toDisplayString()
+				$script:nextSlackPeriod = (get-date ).AddMinutes( $slackPeriodicMinutes )
+			}
+		}
 
 			Function Run-Tools {
 				param ([ Parameter ( Mandatory ) ]
@@ -2187,16 +2246,13 @@ Function Run-Miner {
 
 									}
 									catch {
-										log-Write -logstring "Error converting stats $($profitData.$coinStats.ToDisplayString())" -fore red -notification 2
+										log-Write -logstring "Error converting stats " -fore red -notification 2 -type Error -attachment $profitData.$coinStats.ToDisplayString()
 									}
 								}
 							}
 							catch {
 								log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 3
-								$error
-
-
-							}
+								}
 						}
 					}
 					Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort # -Verbose
@@ -2313,7 +2369,7 @@ Function Run-Miner {
 						return $true
 					}
 					catch {
-						log-Write -logstring "Issue reading $poolsfile $( $error[0] ) "
+						log-Write -logstring "Issue reading $poolsfile " -type Error -attachment $Error[ 0 ]
 						return $false
 					}
 				} else {
@@ -2407,7 +2463,7 @@ Function Run-Miner {
 
 		function restart-script ([string]$msg){
 			log-write -logstring   "$msg" -fore red -notification 1
-			#kill-Process -STAKexe ($STAKexe )
+			kill-Process -STAKexe ($STAKexe )
 			call-self
 			start-sleep -s 5
 		}
@@ -2419,6 +2475,7 @@ Function Run-Miner {
 			$nextCheck = ($script:profitCheckDateTime ).AddMinutes( $ProfitCheckMinutes )
 
 			if ( (  $now -ge $nextCheck ) -or $force ) {
+				# Save current state
 				$currentSave = ($script:pools )
 				function restore-Coinstats { $script:pools = $currentSave } # Restore saved stats
 				$script:profitCheckDateTime = (Get-Date )
@@ -2431,13 +2488,12 @@ Function Run-Miner {
 					}
 					log-write -logstring "Live Profit stat check triggered " -notification 5 -fore yellow
 
-					# Save current state
-
 					# Update stats
 					check-Profit-Stats $script:PoolsList.Keys $script:minhashrate -Silent
 					$bestCoinNow = ($script:pools.ValueSort() ).GetEnumerator() | Select-Object -first 1
 
-					write-verbose "`n$(($script:pools.ValueSort() ).TodisplayString() )" #-verbose
+					write-verbose "`n$(($script:pools.ValueSort() ).TodisplayString() )"
+
 					if ( $lastcoin.Name -eq $bestCoinNow.Name ) {
 						log-write -logstring "Not switching, Already mining: $( $lastcoin.Name )" -notification 2 -fore Yellow
 
@@ -2447,12 +2503,12 @@ Function Run-Miner {
 					} else {
 
 						try {
-							$lastcoin.value = $script:bestcoins."$lastCoinName"
+							$lastcoin.value = $script:pools."$lastCoinName"
 							$diff = ($bestCoinNow.value - $lastcoin.value )
-							if ( $lastcoin.value -gt 0 ) { $lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 ) } else { }
+							if ( $lastcoin.value -gt 0 ) { $lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 ) }
 						}
 						catch {
-							log-write -logstring "Error computing loss percentage $( $error[ 0 ] )" -notification 2 -fore red
+							log-write -logstring "Error computing loss percentage )" -notification 1 -fore red -type Error -attachment $Error[ 0 ]
 							start-sleep -s 30
 
 						}
@@ -2477,7 +2533,7 @@ Function Run-Miner {
 				}
 				catch {
 					restore-Coinstats
-					log-write -logstring "Error attempting to profit switch $( $error | Out-String )  " -notification 1 -fore Yellow
+					log-write -logstring "Error attempting to profit switch " -notification 1 -fore Yellow -type Error -attachment $Error[ 0 ]
 				}
 
 			}
@@ -2711,11 +2767,10 @@ Function Run-Miner {
 				if ( $profitSwitchPercentage ) { $settingsToScreen += @{ "profitSwitchPercentage" = $profitSwitchPercentage } }
 
 				$attachment = $(($settingsToScreen.NameSort()).ToDisplayString())
-				Log-Write -logstring "Displaying Startup Settings" -fore 'White' -notification 3 -linefeed -attachment $attachment # Display settings
+				Log-Write -logstring "Displaying Startup Settings" -fore 'White' -notification 3 -linefeed -attachment $attachment -type Info # Display settings
 
 				write-host "You have $sleeptime seconds before we start next run" -fore Green
 				Start-Sleep -Seconds $sleeptime
-
 				Resize-Console
 				check-Influx                    # check for modules and cancel if needed
 				Check-Network                   # Check you can open google.com on port 80, Prove your network is working
