@@ -1,3 +1,15 @@
+Version 4.4.3
+Release Date 2018-08-01
+
+Changes
+        Bugfix: Removed invokewebrequest for debuging that was causing script to exit
+        Bugfix: Negated a divide by zero bug bwhen working out loss percentage
+        Bugfix: divide by zero issue with profit stats negated
+        altered Slack message format and added attachments for debug and prettiness
+        added a network check in the event of a profit stats refresh error
+        Moved new version debugging Slack messages to own channel #hashmonitor_dev, available to all
+
+
 Version 4.4.2
 Release Date 2018-08-07
 

@@ -2,72 +2,14 @@
 Clear-Host
 $startattempt = 0
 
-# Add display to string method to hashtable type
-Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ToDisplayString `
-        -Value {
-	$maxLength = ($this.keys.length | measure -Maximum ).Maximum
-	$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
-		$v = $this[ $key ]; $stringLength = [int] $key.length
-		$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
-		if ( $key -match "\s" ) {
-			$hashstr += "$key" + $spacing + $v + "`n"
-
-		} else {
-			$hashstr += "$key" + $spacing + $v + "`n"
-		}
-	}
-	return $hashstr
-}
-
-# Add display to string method to ordered hashtable type
-Update-TypeData -TypeName System.Collections.Specialized.OrderedDictionary -MemberType ScriptMethod -MemberName ToDisplayString `
-        -Value {
-	$maxLength = ($this.keys.length | measure -Maximum ).Maximum
-	$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
-		$v = $this[ $key ]; $stringLength = [int] $key.length
-		$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
-		if ( $key -match "\s" ) {
-			$hashstr += "$key" + $spacing + $v + "`n"
-
-		} else {
-			$hashstr += "$key" + $spacing + $v + "`n"
-		}
-	}
-	return $hashstr
-}
-
-# Add sort to hashtable type by name
-Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName NameSort `
-        -Value {
-	$sorted = ($this.GetEnumerator() | Sort-Object Key )
-	$ht = [ordered]@{}
-	foreach ($key in $sorted){
-		#write-host "key $($key.Key) : Value $($key.Value)"
-		$ht.Add($key.Key, $key.Value )
-	}
-	return $ht
-}
-
-# Add sort to hashtable type by value
-Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ValueSort `
-        -Value {
-	$sorted = ($this.GetEnumerator() | Sort-Object Value -Descending)
-	$ht = [ordered]@{}
-	foreach ($key in $sorted){
-		#write-host "key $($key.Key) : Value $($key.Value)"
-		$ht.Add($key.Key, $key.Value )
-	}
-	return $ht
-}
-
 
 Function Run-Miner {
 	try {
 	do {
-		$ver = '4.4.2'
+		$ver = '4.4.3'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
-		$ErrorActionPreference = 'silentlyContinue'
+		$ErrorActionPreference = 'inquire'
 		#$ErrorActionPreference = 'inquire'
 		Push-Location -Path $PSScriptRoot
 		$Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool, Reworked  by Mutl3y v$ver"
@@ -331,7 +273,7 @@ Function Run-Miner {
 			Write-Host 'Creating preferences file'
 			$defaults | Set-Content -Path $Path
 			Write-host -fore yellow "Please review settings in hashmonitor.ini before re-running,`nBe careful and undervolt your cards, dont overclock its not worth it"
-			Exit
+			#Exit
 		}
 
 		try {
@@ -348,7 +290,7 @@ Function Run-Miner {
 			                  Where-Object { ($_.Contains( '=' ) ) -notcontains (($_.Contains( 'vidTool' ) ) ) } |
 			                  Out-String ) -replace '\\', '\\'
 			start-sleep -s 120
-			EXIT
+			#EXIT
 		}
 		if ( $debug ) {
 			Write-Output -InputObject "Confirming input vars from $Path `n ", $inifilevalues
@@ -788,7 +730,8 @@ Function Run-Miner {
 				[ Parameter ( Mandatory, HelpMessage = 'String' ) ][ string ]$logstring,
 			    [ Parameter ( Mandatory, HelpMessage = 'Provide colour to display to screen' ) ][ string ]$fore,
 				[ Parameter ( Mandatory = $true ) ][ int ] $notification,
-				[ switch ]$linefeed
+				[ switch ]$linefeed,
+				[string]$attachment
 
 			)
 			$timeStamp = (get-Date -format r )
@@ -810,7 +753,7 @@ Function Run-Miner {
 					Send-MailMessage -From $gUsername -Subject $msgText -To $smsAddress -UseSSL -Port 587 -SmtpServer smtp.gmail.com -Credential $gCredentials
 				}
 				If ( $slackUrl ) {
-					Send-SlackMessage $msgText, $slackUrl, $slackUsername, $slackChannel, $slackEmoji, $slackIconUrl
+					Send-SlackMessage $logstring, $slackUrl, $slackUsername, $slackChannel, $slackEmoji, $slackIconUrl, $attachment
 				}
 			}
 		}
@@ -974,20 +917,49 @@ Function Run-Miner {
 			}
 
 
-			function Send-SlackMessage {
-				$slackBody = @{ text = $msgText; channel = $slackChannel; username = $slackUsername; icon_emoji = $slackEmoji; icon_url = $slackIconUrl } |
+		function Send-SlackMessage {
+			$text = "$slackUsername`t $logstring"
+
+			if (( $attachment ) -or ($alertLevel -ge 4)) {
+
+				if ($attachment) {
+					write-host "attachment"
+					$attachments = @()
+					$attachments += (@{
+						"text" = $attachment
+					} )
+				}
+
+				if (($debug) -or ($alertLevel -ge 4)) {
+					write-host "debug"
+					$attachments = @()
+					$attachments += (@{
+							"text" = ($inifilevalues.nameSort()).toDisplayString()
+						} )
+
+					}
+
+					$attachmentSlack = @{ "attachments" = $attachments }
+					#$attachment | ConvertTo-Json
+
+					$slackBody = @{ "text" = $text; channel = $slackChannel; 'username' = $slackUsername; 'icon_emoji' = $slackEmoji; 'icon_url' = $slackIconUrl; "attachments" = $attachments } |
+					             ConvertTo-Json
+
+
+				} else {
+				$slackBody = @{ "text" = $text; channel = $slackChannel; 'username' = $slackUsername; 'icon_emoji' = $slackEmoji; 'icon_url' = $slackIconUrl } |
 				             ConvertTo-Json
-				try {
-					$null = Invoke-WebRequest -UseBasicParsing -Method Post -Uri $slackUrl -Body $slackBody
-				}
-				Catch {
-					Write-Host -fore red "Slack message post failure $slackUrl"
-					Write-Host -fore Red "$slackBody"
-					Invoke-WebRequest -UseBasicParsing -Method Post -Uri $slackUrl -Body $slackBody #-Verbose
-				}
+			}
+			try {
+				$null = Invoke-WebRequest -UseBasicParsing -Method Post -Uri $slackUrl -Body $slackBody
+			}
+			Catch {
+				write-verbose "Error sending Slack message"
 			}
 
-			function Invoke-RequireAdmin {
+		}
+
+		function Invoke-RequireAdmin {
 				Param ([ Parameter ( Position = 0, Mandatory, ValueFromPipeline ) ]
 				       [ Management.Automation.InvocationInfo ]
 				       $MyInvocation
@@ -1082,7 +1054,7 @@ Function Run-Miner {
 						log-write -logstring "Connection down: $($timer.Elapsed.ToString( "hh\:mm\:ss" ) )" -fore red -notification 1
 						Start-Sleep -Seconds $CheckEvery
 					} elseif (($timer.Elapsed ).seconds -gt 2) {
-						log-write -logstring "Connection up: Check time taken $($timer.Elapsed.ToString( "hh\:mm\:ss" ) )" -fore red -notification 2
+						log-write -logstring "Connection up: Check time taken $($timer.Elapsed.ToString( "hh\:mm\:ss" ) )" -fore Green -notification 3
 					}
 				}
 
@@ -1097,7 +1069,7 @@ Function Run-Miner {
 				if ( $script:TempWatch -eq 'True' ) {
 					if ( test-path -path $sensorDataFile ) {
 						$validTime = $null
-						log-write -logstring "Checking Room Temp is below $TEMPerMaxTemp c" -fore yellow -notification 2 -linefeed
+						log-write -logstring "Checking Room Temp is below $TEMPerMaxTemp c" -fore yellow -notification 3 -linefeed
 						get-room-temps
 						if ( $script:validSensorTime -eq 'True' ) {
 							log-write -logstring "Valid sensor reading within $TEMPerValidMinutes minutes found: $( $script:lastRoomTemp.Time )" -fore yellow -notification 5
@@ -1925,7 +1897,7 @@ Function Run-Miner {
 				param ([ Parameter ( Mandatory ) ]
 				       $threads
 				)
-				log-write -logstring "Dead thread check" -fore yellow -notification 2
+				log-write -logstring "Dead thread check" -fore yellow -notification 3
 				$nullThreadsReturned = 0
 
 				foreach ( $thread in $threads ) {
@@ -2053,11 +2025,8 @@ Function Run-Miner {
 
 				If ( ($flag -eq 'True' ) -And ($script:currHash -lt $script:minhashrate ) ) {
 					$tFormat = get-RunTime -sec ($runTime )
-					log-Write -logstring "Restarting in 10 seconds after $tFormat - Hash rate dropped from $script:maxhash H/s to $script:currHash H/s" -fore Red -notification 1
-					Start-Sleep -Seconds 10
 					$script:STAKisup = $false
-					kill-Process -STAKexe ($STAKexe )
-					call-self
+					restart-script "Hash rate dropped from $script:maxhash H/s to $script:currHash H/s after $tFormat"
 				}
 			}
 
@@ -2218,14 +2187,14 @@ Function Run-Miner {
 
 									}
 									catch {
-										log-Write -logstring "Error converting stats $($profitData.$coinStats.ToDisplayString())" -fore red -notification 3
+										log-Write -logstring "Error converting stats $($profitData.$coinStats.ToDisplayString())" -fore red -notification 2
 									}
 								}
 							}
 							catch {
-								log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 2
+								log-write -logstring "Nanoppol api stats issue" -fore yellow -notification 3
 								$error
-								pause
+
 
 							}
 						}
@@ -2248,7 +2217,7 @@ Function Run-Miner {
 
 				}
 				catch {
-					log-write -logstring "Error converting stats for display" -fore red -notification 3
+					log-write -logstring "Error converting stats for display" -fore red -notification 2
 					return $null
 				}
 
@@ -2373,6 +2342,7 @@ Function Run-Miner {
 					}
 					catch {
 						log-write -logstring "Issue updating profit stats, Using last set" -for red -notification 2
+						Check-Network
 					}
 				}
 
@@ -2425,7 +2395,7 @@ Function Run-Miner {
 						log-write -logstring "Coins checked,  We are mining $( $ourcoin.Name ) " -fore green -notification 1
 						write-host "Possible pools earnings per day from stats with a min hashrate of $hr H/s" -fore yellow
 						write-host ($script:pools.ValueSort()).ToDisplayString()
-						log-write -logstring   "Difference in Daily earnings: $profitLoss BTC Per day Mining $( $bestcoin.Name )" -fore yellow -notification 3
+						log-write -logstring   "Difference in Daily earnings: $profitLoss BTC Per day Mining $( $bestcoin.Name )" -fore yellow -notification 2
 					}
 
 					# Export coin to mine to script
@@ -2435,55 +2405,86 @@ Function Run-Miner {
 				}
 			}
 
-			function check-current-profit {
-				param ([switch]$force)
-				$now = (get-date )
-				$nextCheck = ($script:profitCheckDateTime).AddMinutes($ProfitCheckMinutes)
-				if ((  $now -ge $nextCheck ) -or $force) {
-					function restore-Coinstats { $script:pools = $currentSave } # Restore saved stats
-					log-write -logstring "Live Profit stat check triggered " -notification 3 -fore yellow
-					$script:profitCheckDateTime = (Get-Date)
-					# Save current state
-					$currentSave = ($script:pools)
-					$lastcoin = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
+		function restart-script ([string]$msg){
+			log-write -logstring   "$msg" -fore red -notification 1
+			#kill-Process -STAKexe ($STAKexe )
+			call-self
+			start-sleep -s 5
+		}
+
+		function check-current-profit {
+			param ([ switch ]$force
+			)
+			$now = (get-date )
+			$nextCheck = ($script:profitCheckDateTime ).AddMinutes( $ProfitCheckMinutes )
+
+			if ( (  $now -ge $nextCheck ) -or $force ) {
+				$currentSave = ($script:pools )
+				function restore-Coinstats { $script:pools = $currentSave } # Restore saved stats
+				$script:profitCheckDateTime = (Get-Date )
+				try {
+					$lastcoin = ($script:pools.ValueSort() ).GetEnumerator() | Select-Object -first 1
 					$lastCoinName = $lastcoin.Name
+					if ( ! ($lastCoinName ) ) {
+						write-host "Coin Disabled" -fore Yellow
+						$forceCoinSwitch = $true
+					}
+					log-write -logstring "Live Profit stat check triggered " -notification 5 -fore yellow
+
+					# Save current state
+
 					# Update stats
 					check-Profit-Stats $script:PoolsList.Keys $script:minhashrate -Silent
-					$bestCoinNow = ($script:pools.ValueSort()).GetEnumerator() | Select-Object -first 1
+					$bestCoinNow = ($script:pools.ValueSort() ).GetEnumerator() | Select-Object -first 1
 
-					write-verbose "`n$(($script:pools.ValueSort()).TodisplayString())" #-verbose
-					if ($lastcoin.Name -eq $bestCoinNow.Name) {
-						log-write -logstring "Not switching, Already mining: $($lastcoin.Name)" -notification 3 -fore Yellow
+					write-verbose "`n$(($script:pools.ValueSort() ).TodisplayString() )" #-verbose
+					if ( $lastcoin.Name -eq $bestCoinNow.Name ) {
+						log-write -logstring "Not switching, Already mining: $( $lastcoin.Name )" -notification 2 -fore Yellow
+
+					} elseif (!($lastCoinName )) {
+						restart-script "Current coin not found, Forcing switch"
 
 					} else {
-						$lastcoin.value = $script:bestcoins."$lastCoinName"
-						$diff = ($bestCoinNow.value - $lastcoin.value )
-						$lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 )
+
+						try {
+							$lastcoin.value = $script:bestcoins."$lastCoinName"
+							$diff = ($bestCoinNow.value - $lastcoin.value )
+							if ( $lastcoin.value -gt 0 ) { $lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 ) } else { }
+						}
+						catch {
+							log-write -logstring "Error computing loss percentage $( $error[ 0 ] )" -notification 2 -fore red
+							start-sleep -s 30
+
+						}
+
 
 
 						if ( $lossPercentage -ge $profitSwitchPercentage ) {
-							log-write -logstring "Could earn up to $lossPercentage % more mining $( $bestCoinNow.name )  " -notification 3 -fore Yellow
+							log-write -logstring "Could earn up to $lossPercentage % more mining $( $bestCoinNow.name )  " -notification 2 -fore Yellow
 							if ( $profitKillRunningStak -eq 'True' ) {
-								log-write -logstring "Live Profit Switching and profitKillRunningStak is enabled, Restarting script in 30 seconds to mine $($bestCoinNow.Name) " -notification 1 -fore Yellow
-								write-verbose "$(($script:pools.ValueSort()).ToDisplayString()) `n $(($script:pools.ValueSort()).ToDisplayString())" #-verbose
-								start-sleep -s 30
-								kill-Process -STAKexe ($STAKexe)
-								call-self
+								write-verbose "$(($script:pools.ValueSort() ).ToDisplayString() ) `n $(($script:pools.ValueSort() ).ToDisplayString() )" #-verbose
+								restart-script "Live Profit Switching and profitKillRunningStak is enabled, Restarting script to mine $( $bestCoinNow.Name ) "
 							} else {
 								log-write -logstring "Live Profit Switching enabled but profitKillRunningStak is not enabled continuing to mine $( $lastcoin.name )" -notification 1 -fore Red
 								Start-Sleep -s $sleeptime
 							}
 						} else {
-							log-write -logstring "Could not earn more than $profitSwitchPercentage % by switching coins ($lossPercentage), continuing to mine $($lastcoin.Name) $diff BTC per day" -notification 3 -fore Yellow
+							log-write -logstring "Could not earn more than $profitSwitchPercentage % by switching coins ($lossPercentage), continuing to mine $( $lastcoin.Name ) $diff BTC per day" -notification 2 -fore Yellow
 							Start-Sleep -s $sleeptime
 						}
 					}
 					restore-Coinstats
 				}
+				catch {
+					restore-Coinstats
+					log-write -logstring "Error attempting to profit switch $( $error | Out-String )  " -notification 1 -fore Yellow
+				}
 
 			}
 
-			function get-coin-specific-parameters {
+		}
+
+		function get-coin-specific-parameters {
 				$poolfile = @{ }
 				$settings = @{ }
 				$rawobj = $script:PoolsList.($script:coinToMine )
@@ -2491,7 +2492,7 @@ Function Run-Miner {
 				if ( $rawobj.settings ) {
 					$rawobj.settings.psobject.properties | ForEach-Object { $settings[ $_.Name ] = $_.Value }
 
-					log-write -logstring "Reading settings from proft $poolsfile  " -fore white -notification 2
+					log-write -logstring "Reading settings from $poolsfile  " -fore white -notification 2
 					if ( $settings.hdiff ) {
 						$script:hdiff = ($settings ).hdiff
 					}
@@ -2520,7 +2521,6 @@ Function Run-Miner {
 						$script:amd = ($settings ).amd
 						if ( test-path -path "$ScriptDir\$script:STAKfolder\$script:amd" ) {
 							try {
-
 								copy-item ("$ScriptDir\$script:STAKfolder\$script:amd" ) -destination ("$ScriptDir\$script:STAKfolder\amd.txt" )
 								log-write -logstring "Copied $( "$ScriptDir\$script:STAKfolder\$script:amd" )" -fore White -notification 3
 							}
@@ -2710,7 +2710,8 @@ Function Run-Miner {
 				if ( $profitKillRunningStak ) { $settingsToScreen += @{ "profitKillRunningStak" = $profitKillRunningStak } }
 				if ( $profitSwitchPercentage ) { $settingsToScreen += @{ "profitSwitchPercentage" = $profitSwitchPercentage } }
 
-				Log-Write -logstring "Displaying Startup Settings `n$(($settingsToScreen.NameSort()).ToDisplayString())" -fore 'White' -notification 1 -linefeed # Display settings
+				$attachment = $(($settingsToScreen.NameSort()).ToDisplayString())
+				Log-Write -logstring "Displaying Startup Settings" -fore 'White' -notification 3 -linefeed -attachment $attachment # Display settings
 
 				write-host "You have $sleeptime seconds before we start next run" -fore Green
 				Start-Sleep -Seconds $sleeptime
@@ -2738,10 +2739,71 @@ Function Run-Miner {
 	}
 
 	catch {
-		write-host "Caught final error causing closure `n  $( $Error[ 0 ] )" -fore Red
+		$msg = "Caught final error causing closure `n $( $error[0] )"
+		write-host $msg -fore Red
+		$msg | out-string | Set-Content -path "abnormalExit.txt"
 		start-sleep -s 60
 	}
 } # End of Run-Miner Function
+
+# Add display to string method to hashtable type
+Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ToDisplayString `
+        -Force -Value {
+	$maxLength = ($this.keys.length | measure -Maximum ).Maximum
+	$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
+		$v = $this[ $key ]; $stringLength = [int] $key.length
+		$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
+		if ( $key -match "\s" ) {
+			$hashstr += "$key" + $spacing + $v + "`n"
+
+		} else {
+			$hashstr += "$key" + $spacing + $v + "`n"
+		}
+	}
+	return $hashstr
+}
+
+# Add display to string method to ordered hashtable type
+Update-TypeData -TypeName System.Collections.Specialized.OrderedDictionary -MemberType ScriptMethod -MemberName ToDisplayString `
+      -Force  -Value {
+	$maxLength = ($this.keys.length | measure -Maximum ).Maximum
+	$hashstr = ""; $keys = $this.keys; foreach ( $key in $keys ) {
+		$v = $this[ $key ]; $stringLength = [int] $key.length
+		$spacing = (' ' * ($maxLength - [int] $key.length ) ) + "`t"
+		if ( $key -match "\s" ) {
+			$hashstr += "$key" + $spacing + $v + "`n"
+
+		} else {
+			$hashstr += "$key" + $spacing + $v + "`n"
+		}
+	}
+	return $hashstr
+}
+
+# Add sort to hashtable type by name
+Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName NameSort `
+        -Force -Value {
+	$sorted = ($this.GetEnumerator() | Sort-Object Key )
+	$ht = [ordered]@{}
+	foreach ($key in $sorted){
+		#write-host "key $($key.Key) : Value $($key.Value)"
+		$ht.Add($key.Key, $key.Value )
+	}
+	return $ht
+}
+
+# Add sort to hashtable type by value
+Update-TypeData -TypeName System.Collections.HashTable -MemberType ScriptMethod -MemberName ValueSort `
+        -Force -Value {
+	$sorted = ($this.GetEnumerator() | Sort-Object Value -Descending)
+	$ht = [ordered]@{}
+	foreach ($key in $sorted){
+		#write-host "key $($key.Key) : Value $($key.Value)"
+		$ht.Add($key.Key, $key.Value )
+	}
+	return $ht
+}
+
 
 # Runtime Variables
 $active = $true
