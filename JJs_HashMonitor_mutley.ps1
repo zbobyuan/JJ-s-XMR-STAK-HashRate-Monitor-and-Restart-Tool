@@ -4,12 +4,11 @@ $startattempt = 0
 
 
 Function Run-Miner {
-	try {
 	do {
 		$ver = '4.4.4'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
-		$ErrorActionPreference = 'inquire'
+		$ErrorActionPreference = 'silentlyContinue'
 		#$ErrorActionPreference = 'inquire'
 		Push-Location -Path $PSScriptRoot
 		$Host.UI.RawUI.WindowTitle = "JJ's XMR-STAK HashRate Monitor and Restart Tool, Reworked  by Mutl3y v$ver"
@@ -2791,14 +2790,13 @@ Function Run-Miner {
 
 
 	} while ( $active -eq $true ) # Used to exit script from anywhwere in code, ignored in fatal driver error
-	}
 
-	catch {
-		$msg = "Caught final error causing closure `n $( $error[0] )"
-		write-host $msg -fore Red
-		$msg | out-string | Set-Content -path "abnormalExit.txt"
-		start-sleep -s 60
-	}
+#	catch {
+#		$msg = "Caught final error causing closure `n $( $error[0] )"
+#		write-host $msg -fore Red
+#		$msg | out-string | Set-Content -path "abnormalExit.txt"
+#		start-sleep -s 60
+#	}
 } # End of Run-Miner Function
 
 # Add display to string method to hashtable type
