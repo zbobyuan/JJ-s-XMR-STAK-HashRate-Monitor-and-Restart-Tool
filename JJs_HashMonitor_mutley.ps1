@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.4.4'
+		$ver = '4.4.5'
 		$debug = $false
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		$ErrorActionPreference = 'silentlyContinue'
@@ -298,7 +298,7 @@ Function Run-Miner {
 			#EXIT
 		}
 		if ( $debug ) {
-			Write-Output -InputObject "Confirming input vars from $Path `n ", $inifilevalues
+			Write-Output -InputObject "Confirming input vars from $Path `n", $inifilevalues
 			Write-Verbose -Message 'Sleeping for 10 seconds' -Verbose
 			Start-Sleep -Seconds 10 -Verbose
 		}
@@ -1397,8 +1397,15 @@ Function Run-Miner {
 							write-verbose "get-room-temps: Last Time $( $script:lastRoomTemp.Time )"
 							write-verbose "get-room-temps: Last Temp $( $script:lastRoomTemp.$TEMPerSensorLocation )"
 
-							if ( $script:lastRoomTemp ) {
-								$script:timeDrift = [int] (new-timespan -Start ([DateTime] $script:lastRoomTemp.Time ) -End (Get-Date ) ).TotalMinutes
+							if ( $script:lastRoomTemp.Time ) {
+								try {
+									$script:timeDrift = [int] (new-timespan -Start ([DateTime] $script:lastRoomTemp.Time ) -End (Get-Date ) ).TotalMinutes
+								}
+								catch {
+									log-write -logstring "Error computing time drift `n" -fore red -notification 1 -linefeed -attachment $Error[ 0 ]
+									sleep -s 1
+									break
+								}
 
 								if ( $TEMPerValidMinutes -gt $script:timeDrift ) {
 									write-verbose "Valid Time found $( $script:lastRoomTemp.Time )"
@@ -1409,15 +1416,18 @@ Function Run-Miner {
 									$script:lastRoomTemp = $null
 									write-verbose "get-room-temps: Time Drift in minutes $script:timeDrift"
 								}
-							} else {
-								log-write -logstring "TempWatch = True but file $sensorDataFile is not found or unreadable" -fore red -notification 1 -linefeed
-								$script:TempWatch = 'False'
 
 							}
+						} else {
+							log-write -logstring "TempWatch = True but file $sensorDataFile is not found or unreadable" -fore red -notification 1 -linefeed
+							$script:TempWatch = 'False'
+
 						}
 					}
 				}
 			}
+
+
 
 
 			##################################
@@ -1825,7 +1835,7 @@ Function Run-Miner {
 					log-write -logstring "Profit switching enabled" -fore green -notification 1
 					if (!(read-Pools-File )) {
 						log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
-						log-write -logstring "Error messages `n $( $Error[ 0 ].InvocationInfo.line )"
+						log-write -logstring "Error messages `n" -attachment $Error[ 0 ] -fore red -notification 1
 					}
 				}
 
@@ -1843,7 +1853,7 @@ Function Run-Miner {
 							start-sleep -s $sleeptime
 						} else {
 							log-Write -logstring "Issue reading  $STAKfolder\$poolsfile" -fore red -notification 1
-							log-write -logstring "Error messages `n $( $Error[ 0 ].InvocationInfo.line )"
+							log-write -logstring "Error messages `n" -attachment $Error[ 0 ]
 							start-sleep -s 15
 						}
 					}
@@ -2368,7 +2378,7 @@ Function Run-Miner {
 						return $true
 					}
 					catch {
-						log-Write -logstring "Issue reading $poolsfile " -type Error -attachment $Error[ 0 ]
+						log-Write -logstring "Issue reading $poolsfile `n" -type Error -attachment $Error[ 0 ]
 						return $false
 					}
 				} else {
@@ -2471,7 +2481,12 @@ Function Run-Miner {
 			param ([ switch ]$force
 			)
 			$now = (get-date )
-			$nextCheck = ($script:profitCheckDateTime ).AddMinutes( $ProfitCheckMinutes )
+			try {
+				$nextCheck = ($script:profitCheckDateTime ).AddMinutes( $ProfitCheckMinutes )
+			}
+			catch {
+				log-write -logstring "Error: ProfitCheckMinutes setting not valid $ProfitCheckMinutes `n" -notification 5 -fore red -attachment $Error[ 0 ]
+			}
 
 			if ( (  $now -ge $nextCheck ) -or $force ) {
 				# Save current state
@@ -2496,7 +2511,7 @@ Function Run-Miner {
 					if ( $lastcoin.Name -eq $bestCoinNow.Name ) {
 						log-write -logstring "Not switching, Already mining: $( $lastcoin.Name )" -notification 2 -fore Yellow
 
-					} elseif (!($lastCoinName )) {
+					} elseif (! ($lastCoinName )) {
 						restart-script "Current coin not found, Forcing switch"
 
 					} else {
@@ -2507,7 +2522,7 @@ Function Run-Miner {
 							if ( $lastcoin.value -gt 0 ) { $lossPercentage = [ math ]::Round( (  ( $diff / $lastcoin.value ) * 100 ), 2 ) }
 						}
 						catch {
-							log-write -logstring "Error computing loss percentage )" -notification 1 -fore red -type Error -attachment $Error[ 0 ]
+							log-write -logstring "Error computing loss percentage `n" -notification 1 -fore red -type Error -attachment $Error[ 0 ]
 							start-sleep -s 30
 
 						}
@@ -2532,10 +2547,11 @@ Function Run-Miner {
 				}
 				catch {
 					restore-Coinstats
-					log-write -logstring "Error attempting to profit switch " -notification 1 -fore Yellow -type Error -attachment $Error[ 0 ]
+					log-write -logstring "Error attempting to profit switch `n" -notification 1 -fore Yellow -type Error -attachment $Error[ 0 ]
 				}
 
 			}
+
 
 		}
 
