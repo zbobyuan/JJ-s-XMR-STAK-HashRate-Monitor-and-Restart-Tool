@@ -1,3 +1,13 @@
+Version 4.4.6
+Release Date 2018-08-22
+Changes
+    Added support for cyptonight-saber and tied its custom profit calculation to cryptonight-heavy
+    Reworked profit che countdown to add secondto countdown when timer less than 2 minutes
+    changed nanopool stats warning mnessage to level 5
+    added pools profit list to slack message at notification level 2
+    Bugfix: Fixed issue with switching coins sometimes failng to switch
+
+
 Version 4.4.5
 Release Date 2018-08-15
 
