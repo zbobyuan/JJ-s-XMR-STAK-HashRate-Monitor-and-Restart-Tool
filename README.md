@@ -1,7 +1,7 @@
-Written to keep your miner hashing and taking care of card issues before they become an issue. You can use this in mixed AMD and Nvidia rigs however card resets are restricted to AMD devices, if you have an Nvidia card  that exhibits hashdrop that is fixed by reseting the card please provide details for it to become supported.
+Written to keep your miner hashing and taking care of card issues before they become a problem. You can use this in mixed AMD and Nvidia rigs however card resets are restricted to AMD devices, if you have an Nvidia card that exhibits hashdrop that is fixed by reseting the card please provide details for it to become supported.
 
 Slack Group for support, Idea's and a place to view your miners logs in realtime should you wish to join in 
-https://join.slack.com/t/hashmonitor/shared_invite/enQtMzkzODgzOTM4MTc2LTM4YjE1MDdiZGYxMGUzNDQ4M2IyYTZmZmE4MDA5YjEyZDA3Nzk2MjI3ZGYwNzA4ZTg3OTA1NTg5MzMyNTEzMDQ
+https://join.slack.com/t/hashmonitor/shared_invite/enQtNDQ2NTg5NDg1ODQ3LTY3MmRjNDM2ZWQyNmM2ZWU1OTlkZWJlODc4YTc2ZTA5NWEzMDg4MjcyNzdiOGYzYmRlMjc2YTA4N2E5NDJkMjQ
 
 Script now incorporates profit switching using predetermined pools set by you,  **Please see ProfitReadme.md for further info**
 
@@ -53,6 +53,9 @@ If you find this software useful please donate what you can spare to the above a
      
     Radeon Software Crimson ReLive Edition Beta for Blockchain Compute Driver for Windows® 7 64/32 bit​        
     https://www2.ati.com/drivers/beta/Win7-Crimson-ReLive-Beta-Blockchain-Workloads-Aug23.exe
+    
+    Radeon Pro Software Adrenalin Edition 18.4.1
+    https://support.amd.com/en-us/kb-articles/Pages/Radeon-Pro-Software-Adrenalin-Edition-18.4.1-Release-Notes.aspx
      
     It should also be compatable with future driver releases
 
