@@ -5,8 +5,9 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.4.6'
+		$ver = '4.4.8'
 		$debug = $false
+		#$verbosePreferenc='Continue'
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
 		$ErrorActionPreference = 'silentlyContinue'
 		#$ErrorActionPreference = 'inquire'
@@ -185,7 +186,7 @@ Function Run-Miner {
 
         # Slack
         # Put your WebHooks URL here,  Default is for this codes Slack space, Usefull if you can allow it to post at least once so I get to see it used out in the wild, your welcome to join and discuss
-        slackUrl=https://hooks.slack.com/services/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
+        slackUrl=https://hooks.slack.com/services/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
         # slackUsername= Defaults to computer name
         # slackChannel='#Hashmonitor'	# Channel to post message. Can be in the format @username or #channel
         # slackEmoji=':clap:'		# Example: :clap:. (Not Mandatory). (if slackEmoji is set, slackIconUrl will not be used)
@@ -196,7 +197,7 @@ Function Run-Miner {
 		slackPeriodicReporting = True
 
 		# How often to send display to slack, minimum 5 minutes,
-		slackPeriodicMinutes = 5
+		slackPeriodicMinutes = 30
 
         # Verbosoty level for Slack notification,
         # 0 to disable
@@ -561,15 +562,23 @@ Function Run-Miner {
 
 
 		if ( $inifilevalues.slackPeriodicReporting ) {
-			if ( $inifilevalues.slackPeriodicReporting -eq 'True' ) { $slackPeriodicReporting = $true } else { $slackPeriodicReporting = $false }
+			if ( $inifilevalues.slackPeriodicReporting -eq 'True' ) {
+				$slackPeriodicReporting = $true
+			} else {
+				$slackPeriodicReporting = $false
+			}
 			$slackPeriodicReporting = $inifilevalues.slackPeriodicReporting
 		} Else {
 			$slackPeriodicReporting = $false
 		}
 
 		if ( $inifilevalues.slackPeriodicMinutes ) {
-			$slackPeriodicMinutes = $inifilevalues.slackPeriodicMinutes
-		} else { $slackPeriodicMinutes = 5 }
+			if ( $inifilevalues.slackPeriodicMinutes -lt 30 ) {
+				$slackPeriodicMinutes = 30
+			} else {
+				$slackPeriodicMinutes = $inifilevalues.slackPeriodicMinutes
+			}
+		} else { $slackPeriodicMinutes = 30 }
 
 
 		# alertLevel=''			# Verbosity of notifications, Defaults to 1
@@ -1418,7 +1427,7 @@ Function Run-Miner {
 								$script:validSensorTime = 'True'
 							} else {
 								write-verbose "Invalid Reading, Too much time drift $script:timeDrift "
-								$script:validSensorTime = 'False'
+								#$script:validSensorTime = 'False' #todo
 								$script:lastRoomTemp = $null
 								write-verbose "get-room-temps: Time Drift in minutes $script:timeDrift"
 							}
@@ -2287,6 +2296,7 @@ Function Run-Miner {
 					}
 				}
 				Write-InfluxUDP -Measure Hashrate -Tags @{ Server = $env:COMPUTERNAME } -Metrics $Metrics -IP $grafanaUtpIP -Port $grafanaUtpPort # -Verbose
+
 			}
 		}
 
@@ -2745,15 +2755,17 @@ Function Run-Miner {
 				if ( test-path -path $sensorDataFile ) {
 					write-host "Truncating $sensorDataFile to last 6 lines" -fore green
 					# Truncating sensor file
-					try {
-						$rawTempFile = Get-Content -path $sensorDataFile -last 6
-						$null = $rawTempFile | set-content -path $sensorDataFile
-					}
-					catch {
-						start-sleep -s  1
-						$null = $rawTempFile | set-content -path $sensorDataFile
-					}
-					start-sleep -s 2
+					$waiting_for_write_confirmation = $true
+					do {
+						try {
+							$rawTempFile = Get-Content -path $sensorDataFile -last 6
+							$null = $rawTempFile | set-content -path $sensorDataFile
+							$waiting_for_write_confirmation = $false
+						}
+						catch {
+							start-sleep -s  0.2
+						}
+					} while ($waiting_for_write_confirmation)
 				}
 			}
 		}
@@ -2771,7 +2783,7 @@ Function Run-Miner {
 
 			# Relaunch if not admin
 			Invoke-RequireAdmin -MyInvocation $script:MyInvocation
-
+			Resize-Console
 			# Display key settings
 			if ( $initalRun ) {
 				log-Write -logstring "Starting the Hash Monitor Script... $ver "-fore White -linefeed  -notification 1
@@ -2798,7 +2810,7 @@ Function Run-Miner {
 
 			write-host "You have $sleeptime seconds before we start next run" -fore Green
 			Start-Sleep -Seconds $sleeptime
-			Resize-Console
+
 			check-Influx                    # check for modules and cancel if needed
 			Check-Network                   # Check you can open google.com on port 80, Prove your network is working
 
