@@ -67,7 +67,9 @@ If you find this software useful please donate what you can spare to the above a
         
 ![Screenshot](grafana_demo.png)
 
-     
+With thanks to Jetbrains and their support of the open source community
+![ https://www.jetbrains.com/?from=JJ-s-XMR-STAK-HashRate-Monitor-and-Restart-Tool](jetbrains-variant-3.png?v=4&s=200)
+ 
      
 
 	
