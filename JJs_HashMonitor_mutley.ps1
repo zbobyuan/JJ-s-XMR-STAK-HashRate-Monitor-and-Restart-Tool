@@ -2536,7 +2536,7 @@ Function Run-Miner {
 					if  ( $lastcoin.Name -eq $bestCoinNow.Name ) {
 						log-write -logstring  "Not switching, Already mining: $( $lastcoin.Name ) `n" -fore yellow -attachment ($script:pools.ValueSort() ).ToDisplayString() -notification 2
 					} elseif (! ($lastCoinName )) {
-						restart-script "Current coin not found, Forcing switch"
+						restart-script "Current pool not found, Forcing switch"
 
 					} else {
 
