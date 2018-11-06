@@ -1,3 +1,17 @@
+Version 4.4.11
+Release Date 2018-11-06
+Changes
+    updated profitswitching with new algorithm names and provided custom calculations for your hardware
+		# Customise algorithm conversion factors
+		cryptonightheavy_factor = 0.6 saber, haven etc
+		cryptonightv2_factor = 0.95
+		cryptonightfast_factor = 1.8
+		cryptonightlite_factor = 2.5
+    added ability to skip card reset during profit switch when using resetcardonstartup setting
+		ProfitResetCardOnRestart = false
+
+
+
 Version 4.4.6
 Release Date 2018-08-22
 Changes
