@@ -5,7 +5,7 @@ $startattempt = 0
 
 Function Run-Miner {
 	do {
-		$ver = '4.4.11'
+		$ver = '4.4.12'
 		$debug = $false
 		#$verbosePreferenc='Continue'
 		$script:VerbosePreferenceDefault = 'silentlyContinue'
@@ -2015,12 +2015,14 @@ Function Run-Miner {
 			}
 			else {
 				if( ( $profitLiveCheckingEnabled -eq 'True' ) -and ($profitSwitching -eq 'True' ) ) {
-					refreshSTAK
-					foreach( $pool in $script:PoolsList.Keys ) {
-						if( $script:PoolsList.$pool.address  |
-						    sls  "$( $script:ConnectedPool )" -ErrorAction SilentlyContinue ) {
-							#( ($script:PoolsList[ $pool ] ).address. $script:ConnectedPool ) {
-							Check-Profit-Stats @($pool) $script:minhashrate
+					if (read-Pools-File) {
+						refreshSTAK
+						foreach( $pool in $script:PoolsList.Keys ) {
+							if( $script:PoolsList.$pool.address  |
+							    sls  "$( $script:ConnectedPool )" -ErrorAction SilentlyContinue ) {
+								#( ($script:PoolsList[ $pool ] ).address. $script:ConnectedPool ) {
+								Check-Profit-Stats @($pool) $script:minhashrate
+							}
 						}
 					}
 

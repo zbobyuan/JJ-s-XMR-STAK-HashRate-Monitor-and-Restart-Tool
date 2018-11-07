@@ -1,6 +1,11 @@
 Version 4.4.11
 Release Date 2018-11-06
 Changes
+    Bugfix: Changed profit switch to check pools file on each check, Fixed
+
+Version 4.4.11
+Release Date 2018-11-06
+Changes
     updated profitswitching with new algorithm names and provided custom calculations for your hardware
 		# Customise algorithm conversion factors
 		cryptonightheavy_factor = 0.6 saber, haven etc
