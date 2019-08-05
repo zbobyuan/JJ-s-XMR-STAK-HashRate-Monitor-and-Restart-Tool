@@ -3,7 +3,7 @@ I'm still maintaining this repo just re-writing it in Golang
 Written to keep your miner hashing and taking care of card issues before they become a problem. You can use this in mixed AMD and Nvidia rigs however card resets are restricted to AMD devices, if you have an Nvidia card that exhibits hashdrop that is fixed by reseting the card please provide details for it to become supported.
 
 Slack Group for support, Idea's and a place to view your miners logs in realtime should you wish to join in 
-https://join.slack.com/t/hashmonitor/shared_invite/enQtNDQ2NTg5NDg1ODQ3LTY3MmRjNDM2ZWQyNmM2ZWU1OTlkZWJlODc4YTc2ZTA5NWEzMDg4MjcyNzdiOGYzYmRlMjc2YTA4N2E5NDJkMjQ
+https://join.slack.com/t/hashmonitor/shared_invite/enQtNDQ2NTg5NDg1ODQ3LWNhYTE3MzUxMDRjYWI5ZDM0MmI1OTMwYWM5N2JkYjYyM2UwMDY4MmVhMmRmYzVlNWE3MDg0ZjcwYjg3OGE4OWY
 
 Script now incorporates profit switching using predetermined pools set by you,  **Please see ProfitReadme.md for further info**
 
