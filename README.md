@@ -1,4 +1,5 @@
 I'm still maintaining this repo just re-writing it in Golang
+https://github.com/mutl3y/goHashmonitor
 
 Written to keep your miner hashing and taking care of card issues before they become a problem. You can use this in mixed AMD and Nvidia rigs however card resets are restricted to AMD devices, if you have an Nvidia card that exhibits hashdrop that is fixed by reseting the card please provide details for it to become supported.
 
