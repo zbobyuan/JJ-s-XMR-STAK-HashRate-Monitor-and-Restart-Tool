@@ -1,10 +1,416 @@
-Version: 2.9
-Release Date: 2017-11-30
-Changes:	Fixed an issue where the script would fail if parent path contained spaces
-		Some Progress bars are now hidden
-		Removed STAK process not found message (irrelevant)
-		Changed out elevation code
-		Moved elevation code into the FUNCTION area of the script
+Version 4.4.11
+Release Date 2018-11-06
+Changes
+    Bugfix: Changed profit switch to check pools file on each check, Fixed
+
+Version 4.4.11
+Release Date 2018-11-06
+Changes
+    updated profitswitching with new algorithm names and provided custom calculations for your hardware
+		# Customise algorithm conversion factors
+		cryptonightheavy_factor = 0.6 saber, haven etc
+		cryptonightv2_factor = 0.95
+		cryptonightfast_factor = 1.8
+		cryptonightlite_factor = 2.5
+    added ability to skip card reset during profit switch when using resetcardonstartup setting
+		ProfitResetCardOnRestart = false
+
+
+
+Version 4.4.6
+Release Date 2018-08-22
+Changes
+    Added support for cyptonight-saber and tied its custom profit calculation to cryptonight-heavy
+    Reworked profit che countdown to add secondto countdown when timer less than 2 minutes
+    changed nanopool stats warning mnessage to level 5
+    added pools profit list to slack message at notification level 2
+    Bugfix: Fixed issue with switching coins sometimes failng to switch
+
+
+Version 4.4.5
+Release Date 2018-08-15
+
+Changes
+    Bugfix: Changed errorPreference to silentyContinue
+    Bugfix: Updated catch statements for better error handling
+
+
+
+Version 4.4.4
+Release Date 2018-08-11
+
+Changes
+        Bugfix: Fixed invalid profit percentage calculation
+        Added periodic sending of hashmonitor display toi stak as an attachment, Disabled by default
+        Added timeperiod for sending display stats to slack
+        Added colour decoration to slack attachment messages to signify type
+
+Version 4.4.3
+Release Date 2018-08-11
+
+Changes
+        Bugfix: Removed invokewebrequest for debuging that was causing script to exit
+        Bugfix: Negated a divide by zero bug bwhen working out loss percentage
+        Bugfix: divide by zero issue with profit stats negated
+        altered Slack message format and added attachments for debug and prettiness
+        added a network check in the event of a profit stats refresh error
+        Moved new version debugging Slack messages to own channel #hashmonitor_dev, available to all
+
+
+Version 4.4.2
+Release Date 2018-08-07
+
+Changes
+        removed redundant pools.txt content read
+        added catch clauses reading config files to aid users in diagnosis of issue
+        Bugfix: Corrected error where profit switching would attempt to switch to same coin
+
+Version 4.4.1
+Release Date 2018-08-06
+
+Changes
+        Bugfix: If liveprofitswitching enabled and profitswitching disabled caused error
+        Bugfix: Changed default error behaviour to silentyContinue
+        Bugfix: Updated temp sensor error status to disable in the event of corrupt file
+        Updated grafana startup script to include a build statement
+        added catch clauses for nanopool stats
+
+
+Version 4.4.0
+Release Date 2018-08-05
+
+Changes
+		Live profit checking with option to switch coins
+		New settings with defaults
+		    profitLiveCheckingEnabled = True
+		    profitKillRunningStak = False
+    		profitSwitchPercentage = 5
+    		ProfitCheckMinutes = 30
+        Updated grafana start script to build image locally
+
+
+Version 4.3.16
+Release Date 2018-07-31
+
+Changes
+    Added custom Cryptonight heavy adjustment to profit calculations, Needed for Vega Frontier Editions
+
+Version 4.3.15
+Release Date 2018-07-29
+
+Changes
+    Update to error reporting when stak executable isn't found to assist new users
+
+Version 4.3.14
+Release Date 2018-07-28
+
+Changes
+    Changed stop gpu to reset gpu when max temp hit, Stopping the card left it in an uncontrolled state
+
+
+Version 4.3.13
+Release Date 2018-07-26
+
+Changes
+    Added enabled field to pools.json, set to disabled to exclude a coin from mining, commenting out section no longer required
+    Bugfix, truncate sensor file to 6 lines when starting a loop was running every loop
+
+Version 4.3.12
+Release Date 2018-07-22
+
+Changes
+    Bugfix: Nanopool stats issue
+    Tidied up display output
+
+
+Version 4.3.12
+Release Date 2018-07-22
+
+Changes
+    Added additional reboot logic if installed cards less than set value after additional reset
+    Added truncate sensorfile to startup logic to keep file small
+    Adjusted some alert settings to reduce logging sent to slack at lower notification levels
+
+Version 4.3.11
+Release Date 2018-07-13
+
+Changes
+    Bugfix: not all cards were stopping when max temp was reached
+    Bugfix: was continuing to send temp readings after timedrift exceeded
+
+
+Version 4.3.10
+Release Date 2018-07-13
+
+Changes
+    Added stop option to reset gpu logic to disable drivers only, used in over temp situation
+    Fixed issue where minhashrate was not being honoured when profitswitching enabled
+    Added options to ini file
+        TempWatch           enable temp monitoring logic, default false
+        sensorDataFile      full path  to csv file created by TEMPer usb sensor
+        TEMPerMaxTemp       Max temp allowed
+        killStakOnMaxTemp   set to true to kill XMR-STAK and disable GPU's if over max temp, will resume when temp below max
+
+
+Version 4.3.9
+Release Date 2018-07-13
+
+Changes
+    Bugfix, Replaced reboot logic with a forced reset of cards to reset devices in error or disabled at startup
+
+Version 4.3.8
+Release Date 2018-07-12
+
+Changes
+    Amended typecast error when displaying board count
+    added temperature monitoring using TEMPerX1 usb sensor, includes max temp with ability to stop mining
+
+
+Version 4.3.5
+Release Date 2018-07-07
+
+Changes
+    Profit switching functionality extention as it now supports per coin
+        amd.txt, nvida.txt, cpu.txt , this allows you to mine a coin and figure out best parameters such as intensity
+        minhashrate, Not all coins mine the same rate
+        hdiff, hashdrop setting
+        nanoipoolapi moved into main script so only a single executable is needed
+        if grafana is enabled and influx database modules are not installed script will prompt for instalation permision
+
+Note
+    If you enable profit switching you MUST create default_amd.txt, default_nvida.txt and default_cpu.txt config files
+        These will be used if you do not specify anything in the pool config.
+
+
+Version 4.3.4
+Release Date 2018-07-04
+
+Changes:
+    Added pool switching based on profit stats from http://minecryptonight.net/, Triggered at startup and at restart
+    of miner, Uses 1Hr stats, stats are saved in the folder as profit.json if you want to review these are also in your
+    logfiles
+    Added dead thread check for when xmr-stak is returning null data due to dead thread, triggers card restart and test
+    Added generate_pool_json.ps1 This creates an example pools.json file for profit switching
+
+
+Notes
+    generate_pool_json.ps1, right mouse click and choose run with powershell
+    This generates an example pools.json using my own pools,  whilst I would be grateful for some hashes this is here
+    to create an example pools.json file for you to edit you are welcome to use them for testing
+
+    You can edit either the powershell script or the pools.json file depending on your preference
+    however you must ensure you comment out entire sections
+
+    pools.json = can have items commented out using / or #  sections start { and end with }, these are verticaly aligned
+    generate_pool_json.ps1 = standard powershell commenting
+
+    if you get a failure to read file message you have made a mistake, if its a bug please report via slack channel
+
+Version 4.3.1
+Release Date: 2018-06-23
+
+Changes:
+    Added    Radeon (TM) RX 470 Graphics & Radeon (TM) RX 480 Graphics card reset support
+
+
+Version 4.3.0
+Release Date: 2018-06-16
+Notes:
+    If your using Nanopool this will now report poolside stats, prices and predicted profability, it does this by
+    reading your wallet address and worker id from your pools.txt file, please disable nanopool stats if you do
+    not wish this to happen, this information is not sent anywhere, I respect yuor privacy if you have any concerns
+    please contact me
+
+    If you have another pool which you would like included in a future release please add a request with the url
+    for their api documentation
+
+    improved device reset code, introduced third party app to test gpu's named 'clinfo.exe', I have included this as an
+    executable however you can also compile from source
+
+Changes:
+    Added nanopool api refresh rate, minnimum 10, default 30, too often and you will be blocked
+    Added clinfo utility to query opencl devices after a reset, exposes error's before trying to start STAK if theres
+        issues, using this to work around the wmi refresh issue that causes devices to show as ok when they are in error
+    Removed additonal card test and 15 second wait time after device reset as clinfo takes care of exposing device errors
+    Logging device reset times changed to notification level 4, set your notification level to at least 4 to send this data
+
+Required
+    clinfo.exe, executable included, Source https://github.com/Oblomov/clinfo
+    Personally scanned with malware Bytes, Please report any false positives from any software ASAP.
+
+Version 4.2.19
+Release Date: 2018-06-15
+Notes:
+
+Changes:
+    Added nanopool api functionality to track poolside stats, prices and predicted profability features to grafana when using that pool
+
+
+Version 4.2.18
+Release Date: 2018-06-10
+Notes:
+
+Changes:
+    Logging device reset times with a view to an additional way of capturing device restart issues
+        This is set to always show on Slack if enabled with a view to me correlating these times of our miners to find a good default setting and this allows you to set maxDeviceResetTime
+    maxDeviceResetTime, if disabling a device takes longer than this the device is concidered in error state, in seconds will reboot if enabled, default 2
+
+Version 4.2.17
+Release Date: 2018-06-01
+Notes:
+    Issue found with the way devices are reset, driver reports ok for a while after a reset
+        a 15 second pause and additional card test when ResetCardOnStartup is activated appears to capture this
+        please let me know of any issues with this via Slack channel happy to asist where I can
+
+Changes:
+    Added addidional test and a pause of 15 seconds on startup to all display drivers to update
+    Added temporary connection failure alerts and logging
+    negated redundant reset cards on startup
+
+
+Version 4.2.16
+Release Date: ---
+Notes:
+    Reboot rule change
+    ** Warning Vega's can throw error that starts with hashdrop and ends with       **
+    ** fans going crazy and eventually BSOD a controlled reboot stops this issue.   **
+    ** strongly suggest you enable reboots to protect your cards                    **
+
+Changes:
+    reboot rule enhancements, always respect reboot rules no matter whats happening,
+    elevated low hash rate alert and modified to always report hash rates when it does
+    corrected typo in progressPreference variable
+    added ErrorActionPreference and set to silentlyContinue
+
+
+Version 4.2.15
+Release Date: 2018-05-29
+Notes:  Enhanced alerts
+
+Changes:
+    Modified email so only critical events are sent
+
+Version 4.2.14
+Release Date: 2018-05-28
+Notes:  Enhanced logging, Configurable wait on device reset
+
+Changes:
+    Capture mined currecny for logging
+    exposed wait time between device resets devwait = 3
+
+Version 4.2.13
+Release Date: 2018-05-26
+Notes:  Card reset change to cope with gost cards caused by driver install issues
+
+Changes:
+    Changed card restart to ignore missing devices
+
+Version 4.2.12
+Release Date: 2018-05-26
+Notes:  Included Grafana Dashboard example
+
+Changes:
+    Removed cpu and memory trackign from grafana output
+    Released new exe
+
+Version 4.2.11
+Release Date: 2018-05-26
+Notes:  Included Grafana Dashboard example
+
+Changes:
+    Included Grafana dashboard example that can be imported
+    Slack verbosity control
+    Code readability cleanup
+    Add Influx module warning, Disables Grafana it Influx module not available
+    Added Windows based monitor.cmd to setup Grafana on Docker
+	
+Notes: 
+	Current Slack invite is https://join.slack.com/t/hashmonitor/shared_invite/enQtMzcxNDgyMjQ1NzUxLWY2NTA2NDdmNDBhM2QyNzIyNzgyYjNjMjFjYzA3NDZiNDFmYjVjYjEwMWZjNWZiYWUyZDM5OWVkNDY5MmJmMzM
+	Introduced alertLevel setting to control verbosity of Slack massages, Defaults to 1
+    Reccomend that Grafana is run on a different host than any of your miners but will work locally, not a good idea
+        when your rebooting the host, You can use an internet based service
+
+Version 4.2.10
+Release Date: 2018-05-25
+Notes:  Included dockerfile and directory structure for Grafana
+
+Required:
+    Docker
+
+Changes:
+    Update Slack URL to current invite, expires 29/06/2018
+    Added in framework for Dockerised Grafana instance
+    Changed timestamp in logs and notifications to be rfc1123 compliant http://www.ietf.org/rfc/rfc1123.txt
+    Exposed sleeptime between checks in ini file, Affects screen refresh and metric submission to Grafana
+
+Version 4.2.9
+Release Date: 2018-05-15
+Notes:  Moved default Slack url nto ini file so user can disable
+
+Required:
+    https://github.com/markwragg/PowerShell-Influx
+    to install open a Powershell windows and type "Install-Module Influx -Scope CurrentUser"
+
+Changes:
+    Added Slack post failure warning to screen to allow diag, clear Slack url to disable notification
+
+
+Version 4.2.8
+Release Date: 2018-05-15
+Notes:  Integrated notifications, Come say hi https://join.slack.com/t/hashmonitor/signup
+
+Changes:
+    Changed card reset on startup to be a user configurable item
+    Integrated Slack and email notifications, Key startup and error values only,
+        Warning SMS's are single item messages which can be prolific, enable with caution
+
+
+Version 4.2.6
+Releae Date: 2018-05-12
+Notes:  RX580 enhanced startup control
+
+Changes:
+        Now checks for STAK hanging on startup and allow a configurable amount of retries before rebooting pc
+            enabled by setting STAKMaxStartAttampts > 0
+        Enabled full display driver reset for supported cards at launch if card reset enabled
+            RX580's sometimes don't show driver error until they have been reset once and just play-up in the meantime
+            This does not change targeted reset during runtime behaviour
+
+
+
+Version 4.2.5
+Release Date: 2018-05-05
+Notes:  First release of Mutl3y's fork
+
+Changes:
+        Checks for running XMR-STAK on startup and attempts to connect, failure initiates restart of XMR-STAK
+        User settings moved out to ini file, generated on initial run, Please read this thoughly
+        Added support for AMD 580 and Vega Frontier Edition cards by default
+        Targeted card reset on error, Resets all cards if hashdrop detected, Less reset's less issues
+        Added Grafana UDP metrics output, Captures per thread stats
+        10 second timeout during startup to catch xmr-stak issues
+        disables crossfire at launch for Vega's
+        Internet connectivity checked and monitoring is paused until avaialble, max 10 minutes by default
+        sub folders for logs and xmr-stak enabled by default for neatness
+
+        Settings added
+            minimum hash rate:  Absolute bare minimum to use for hash drop calculations, uses (max-hash - hdiff) if higher
+            runningSTAKtimeout: Wait time for running stak to repond
+            minlowratecheck:    Minimum time to wait for hashrate to stabalise at startup before checking minhashrate
+            minhashrate:        Minimum accepted hashrate, changes to (max-hashrate - hdiff) if higher
+            rebootTimeout:      Time to wait if reboot triggered
+            rebootEnabled:      Reboot on driver error
+            timeout:            XMR-STAK startup timeout
+            STAKstable:         Hashrate stabalization period
+            internetWaitTime:   How long to wait for an internet connection issue to resolve
+            retrytimer:         How long to wait for hashrate to recover before restarting cards
+            grafanaEnabled:     Enable Grafana metrics, InfluxDB UDP support only
+            grafanaUtpIP:       IP address of you Grafana instance
+            grafanaUtpPort:     InfluxDB utp port, Remember to set default UTP database
+
+Requires:
+        Requires https://github.com/markwragg/PowerShell-Influx
+        To install from PSGallery run  "Install-Module Influx -Scope CurrentUser"
 
 Version: 3.0
 Release Date: 2017-12-02
@@ -19,3 +425,13 @@ Changes:	Each Vega card is now reset individually. This should work better for
 		Good Shares
 		Good Shares %
 		Share Time
+
+
+Version: 2.9
+Release Date: 2017-11-30
+Changes:	Fixed an issue where the script would fail if parent path contained spaces
+		Some Progress bars are now hidden
+		Removed STAK process not found message (irrelevant)
+		Changed out elevation code
+		Moved elevation code into the FUNCTION area of the script
+
